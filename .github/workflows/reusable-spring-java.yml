@@ -31,6 +31,10 @@ jobs:
           gradle-version: "8.7"
           dependency-graph: disabled
 
+      - name: Run checkstyle
+        working-directory: ${{ inputs.service_path }}
+        run: gradle checkstyleMain checkstyleTest
+
       - name: Compile Java
         working-directory: ${{ inputs.service_path }}
         run: gradle compileJava

@@ -31,6 +31,10 @@ jobs:
           gradle-version: "8.7"
           dependency-graph: disabled
 
+      - name: Run ktlint
+        working-directory: ${{ inputs.service_path }}
+        run: gradle ktlintCheck
+
       - name: Compile Kotlin
         working-directory: ${{ inputs.service_path }}
         run: gradle compileKotlin
