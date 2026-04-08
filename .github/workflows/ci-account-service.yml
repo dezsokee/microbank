@@ -2,7 +2,6 @@ name: CI — Account Service
 
 on:
   push:
-    branches: [main]
     paths: [services/account-service/**, .github/workflows/reusable-spring-kotlin.yml, .github/workflows/ci-account-service.yml]
   pull_request:
     branches: [main]

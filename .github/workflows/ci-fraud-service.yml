@@ -2,7 +2,6 @@ name: CI — Fraud Detection
 
 on:
   push:
-    branches: [main]
     paths: [services/fraud-service/**, .github/workflows/reusable-go.yml, .github/workflows/ci-fraud-service.yml]
   pull_request:
     branches: [main]
