@@ -2,9 +2,9 @@ name: CI — Audit Log Service
 
 on:
   push:
+    branches: [main]
     paths: [services/audit-service/**, .github/workflows/reusable-spring-java.yml, .github/workflows/ci-audit-service.yml]
   pull_request:
-    branches: [main]
     paths: [services/audit-service/**, .github/workflows/reusable-spring-java.yml, .github/workflows/ci-audit-service.yml]
 
 jobs:

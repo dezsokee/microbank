@@ -2,9 +2,9 @@ name: CI — Exchange Rate Service
 
 on:
   push:
+    branches: [main]
     paths: [services/exchange-service/**, .github/workflows/reusable-python.yml, .github/workflows/ci-exchange-service.yml]
   pull_request:
-    branches: [main]
     paths: [services/exchange-service/**, .github/workflows/reusable-python.yml, .github/workflows/ci-exchange-service.yml]
 
 jobs:
