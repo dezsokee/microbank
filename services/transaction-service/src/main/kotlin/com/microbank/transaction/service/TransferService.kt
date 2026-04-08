@@ -142,7 +142,6 @@ class TransferService(
 
             // Step 9: Return completed transaction
             return toResponse(transaction)
-
         } catch (e: Exception) {
             logger.error("Transfer failed for transaction $transactionId: ${e.message}", e)
             return failTransaction(transaction, "TRANSFER_FAILED", e.message ?: "Unexpected error during transfer")

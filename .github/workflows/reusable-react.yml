@@ -1,0 +1,81 @@
+name: React CI
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        required: true
+        type: string
+      service_path:
+        required: true
+        type: string
+
+env:
+  NODE_VERSION: "20"
+  REGISTRY: ghcr.io
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.service_path }}
+        run: npm install
+
+      - name: Run TypeScript check
+        working-directory: ${{ inputs.service_path }}
+        run: npx tsc --noEmit
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.service_path }}
+        run: npm install
+
+      - name: Build
+        working-directory: ${{ inputs.service_path }}
+        run: npm run build
+
+  build-and-push:
+    name: Build & Push
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        working-directory: ${{ inputs.service_path }}
+        env:
+          IMAGE_TAG: ${{ env.REGISTRY }}/${{ github.repository_owner }}/microbank-${{ inputs.service_name }}:${{ github.sha }}
+          IMAGE_LATEST: ${{ env.REGISTRY }}/${{ github.repository_owner }}/microbank-${{ inputs.service_name }}:latest
+        run: |
+          docker build -t $IMAGE_TAG -t $IMAGE_LATEST .
+          docker push $IMAGE_TAG
+          docker push $IMAGE_LATEST

@@ -64,7 +64,7 @@ type errorResponse struct {
 func writeError(w http.ResponseWriter, statusCode int, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(errorResponse{
+	_ = json.NewEncoder(w).Encode(errorResponse{
 		Error:     code,
 		Message:   message,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
@@ -223,7 +223,7 @@ func newReverseProxy(target string) http.Handler {
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status":    "ok",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	})

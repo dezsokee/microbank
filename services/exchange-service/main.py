@@ -16,6 +16,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 # JSON logging setup
 # ---------------------------------------------------------------------------
 
+
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         log_record: dict[str, Any] = {
@@ -226,7 +227,11 @@ async def convert(req: ConvertRequest):
 
     logger.info(
         "Converted %s %s -> %s %s (rate=%s)",
-        amount, from_curr, converted, to_curr, rate,
+        amount,
+        from_curr,
+        converted,
+        to_curr,
+        rate,
     )
 
     return {
