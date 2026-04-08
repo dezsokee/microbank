@@ -3,9 +3,6 @@ name: CI — Notification Service
 on:
   push:
     paths: [services/notification-service/**, .github/workflows/reusable-python.yml, .github/workflows/ci-notification-service.yml]
-  pull_request:
-    branches: [main]
-    paths: [services/notification-service/**, .github/workflows/reusable-python.yml, .github/workflows/ci-notification-service.yml]
 
 jobs:
   ci:
