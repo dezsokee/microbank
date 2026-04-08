@@ -1,0 +1,16 @@
+name: CI — Account Service
+
+on:
+  push:
+    branches: [main]
+    paths: [services/account-service/**, .github/workflows/reusable-spring-kotlin.yml, .github/workflows/ci-account-service.yml]
+  pull_request:
+    branches: [main]
+    paths: [services/account-service/**, .github/workflows/reusable-spring-kotlin.yml, .github/workflows/ci-account-service.yml]
+
+jobs:
+  ci:
+    uses: ./.github/workflows/reusable-spring-kotlin.yml
+    with:
+      service_name: account-service
+      service_path: services/account-service

@@ -1,0 +1,16 @@
+name: CI — Transaction Service
+
+on:
+  push:
+    branches: [main]
+    paths: [services/transaction-service/**, .github/workflows/reusable-spring-kotlin.yml, .github/workflows/ci-transaction-service.yml]
+  pull_request:
+    branches: [main]
+    paths: [services/transaction-service/**, .github/workflows/reusable-spring-kotlin.yml, .github/workflows/ci-transaction-service.yml]
+
+jobs:
+  ci:
+    uses: ./.github/workflows/reusable-spring-kotlin.yml
+    with:
+      service_name: transaction-service
+      service_path: services/transaction-service

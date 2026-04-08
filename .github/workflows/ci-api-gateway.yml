@@ -1,0 +1,16 @@
+name: CI — API Gateway
+
+on:
+  push:
+    branches: [main]
+    paths: [services/api-gateway/**, .github/workflows/reusable-go.yml, .github/workflows/ci-api-gateway.yml]
+  pull_request:
+    branches: [main]
+    paths: [services/api-gateway/**, .github/workflows/reusable-go.yml, .github/workflows/ci-api-gateway.yml]
+
+jobs:
+  ci:
+    uses: ./.github/workflows/reusable-go.yml
+    with:
+      service_name: api-gateway
+      service_path: services/api-gateway
