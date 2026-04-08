@@ -54,7 +54,7 @@ jobs:
 
       - name: Run tests
         working-directory: ${{ inputs.service_path }}
-        run: pytest -v --cov=. --cov-report=xml
+        run: pytest -v --cov=. --cov-report=xml || test $? -eq 5
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4

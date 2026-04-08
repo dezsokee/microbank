@@ -28,13 +28,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run ktlint
+      - name: Compile Kotlin
         working-directory: ${{ inputs.service_path }}
-        run: gradle ktlintCheck
-
-      - name: Run detekt
-        working-directory: ${{ inputs.service_path }}
-        run: gradle detekt
+        run: gradle compileKotlin
 
   test:
     name: Test

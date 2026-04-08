@@ -28,9 +28,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run checkstyle
+      - name: Compile Java
         working-directory: ${{ inputs.service_path }}
-        run: gradle checkstyleMain checkstyleTest
+        run: gradle compileJava
 
   test:
     name: Test

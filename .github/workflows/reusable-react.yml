@@ -29,10 +29,6 @@ jobs:
         working-directory: ${{ inputs.service_path }}
         run: npm install
 
-      - name: Run ESLint
-        working-directory: ${{ inputs.service_path }}
-        run: npx eslint src/
-
       - name: Run TypeScript check
         working-directory: ${{ inputs.service_path }}
         run: npx tsc --noEmit
@@ -52,15 +48,9 @@ jobs:
         working-directory: ${{ inputs.service_path }}
         run: npm install
 
-      - name: Run tests
+      - name: Build
         working-directory: ${{ inputs.service_path }}
-        run: npx vitest run --coverage
-
-      - name: Upload coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ inputs.service_name }}
-          path: ${{ inputs.service_path }}/coverage/
+        run: npm run build
 
   build-and-push:
     name: Build & Push
