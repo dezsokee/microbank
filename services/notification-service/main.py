@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 # JSON logging to stdout
 # ---------------------------------------------------------------------------
 
+
 class JsonLogFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         log_record = {
@@ -51,11 +52,14 @@ notifications: list[dict] = []
 # Pydantic models
 # ---------------------------------------------------------------------------
 
+
 class NotificationRequest(BaseModel):
     type: str = Field(..., examples=["TRANSFER_COMPLETED"])
     userId: str = Field(..., examples=["uuid-1"])
     transactionId: Optional[str] = Field(None, examples=["tx-uuid"])
-    message: str = Field(..., examples=["Transfer of 100.00 EUR to acc-2 completed successfully"])
+    message: str = Field(
+        ..., examples=["Transfer of 100.00 EUR to acc-2 completed successfully"]
+    )
 
 
 class NotificationResponse(BaseModel):
@@ -81,6 +85,7 @@ class ErrorResponse(BaseModel):
     message: str
     timestamp: str
 
+
 # ---------------------------------------------------------------------------
 # FastAPI application
 # ---------------------------------------------------------------------------
@@ -98,6 +103,7 @@ Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 # Exception handlers
 # ---------------------------------------------------------------------------
 
+
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     logger.error("Unhandled exception: %s", str(exc), exc_info=True)
@@ -110,9 +116,11 @@ async def generic_exception_handler(request: Request, exc: Exception):
         },
     )
 
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @app.get("/healthz")
 async def health_check():

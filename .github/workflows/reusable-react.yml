@@ -24,12 +24,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: ${{ inputs.service_path }}/package-lock.json
 
       - name: Install dependencies
         working-directory: ${{ inputs.service_path }}
-        run: npm ci
+        run: npm install
 
       - name: Run ESLint
         working-directory: ${{ inputs.service_path }}
@@ -49,12 +47,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: ${{ inputs.service_path }}/package-lock.json
 
       - name: Install dependencies
         working-directory: ${{ inputs.service_path }}
-        run: npm ci
+        run: npm install
 
       - name: Run tests
         working-directory: ${{ inputs.service_path }}
