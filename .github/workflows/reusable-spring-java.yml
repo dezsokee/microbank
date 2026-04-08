@@ -28,6 +28,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
+          gradle-version: "8.7"
           dependency-graph: disabled
 
       - name: Compile Java
@@ -63,6 +64,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
+          gradle-version: "8.7"
           dependency-graph: disabled
 
       - name: Run tests
