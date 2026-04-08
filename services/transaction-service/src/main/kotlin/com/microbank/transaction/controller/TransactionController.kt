@@ -2,7 +2,6 @@ package com.microbank.transaction.controller
 
 import com.microbank.transaction.dto.ErrorResponse
 import com.microbank.transaction.dto.TransferRequest
-import com.microbank.transaction.dto.TransferResponse
 import com.microbank.transaction.service.TransferService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
