@@ -2,6 +2,7 @@ name: CI — Auth Service
 
 on:
   push:
+    branches: [main]
     paths: [services/auth-service/**, .github/workflows/reusable-go.yml, .github/workflows/ci-auth-service.yml]
   pull_request:
     paths: [services/auth-service/**, .github/workflows/reusable-go.yml, .github/workflows/ci-auth-service.yml]
