@@ -3,6 +3,8 @@ name: CI — Frontend
 on:
   push:
     paths: [services/frontend/**, .github/workflows/reusable-react.yml, .github/workflows/ci-frontend.yml]
+  pull_request:
+    paths: [services/frontend/**, .github/workflows/reusable-react.yml, .github/workflows/ci-frontend.yml]
 
 jobs:
   ci:
