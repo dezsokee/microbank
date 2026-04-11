@@ -1,13 +1,14 @@
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: {{ include "postgres.fullname" . }}
   namespace: {{ .Values.global.namespace }}
   labels:
     {{- include "postgres.labels" . | nindent 4 }}
 spec:
-  serviceName: {{ include "postgres.fullname" . }}
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "postgres.selectorLabels" . | nindent 6 }}
@@ -63,17 +64,8 @@ spec:
             - name: init-scripts
               mountPath: /docker-entrypoint-initdb.d
       volumes:
+        - name: data
+          emptyDir: {}
         - name: init-scripts
           configMap:
             name: {{ include "postgres.fullname" . }}-init
-  volumeClaimTemplates:
-    - metadata:
-        name: data
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        {{- if .Values.storage.storageClass }}
-        storageClassName: {{ .Values.storage.storageClass | quote }}
-        {{- end }}
-        resources:
-          requests:
-            storage: {{ .Values.storage.size }}
