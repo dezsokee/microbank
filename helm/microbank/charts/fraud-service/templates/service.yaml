@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fraud-service.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "fraud-service.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8084
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "fraud-service.selectorLabels" . | nindent 4 }}

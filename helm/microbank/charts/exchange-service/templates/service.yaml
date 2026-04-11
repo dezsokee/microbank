@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "exchange-service.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "exchange-service.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8085
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "exchange-service.selectorLabels" . | nindent 4 }}
