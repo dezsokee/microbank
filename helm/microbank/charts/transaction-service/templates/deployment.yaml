@@ -58,18 +58,24 @@ spec:
               value: {{ printf "http://%s-notification-service:8086" .Release.Name | quote }}
             - name: AUDIT_SERVICE_URL
               value: {{ printf "http://%s-audit-service:8087" .Release.Name | quote }}
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8083
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
           livenessProbe:
             httpGet:
               path: /healthz
               port: 8083
-            initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
           readinessProbe:
             httpGet:
               path: /actuator/health
               port: 8083
-            initialDelaySeconds: 30
             periodSeconds: 5
             timeoutSeconds: 3
           resources:
