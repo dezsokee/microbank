@@ -20,7 +20,7 @@ data:
           "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
           "targets": [
             {
-              "expr": "count(up{namespace=\"{{ .Values.namespace }}\"} == 1)",
+              "expr": "count(up{job!=\"prometheus\"} == 1)",
               "legendFormat": "Healthy"
             }
           ],
@@ -44,11 +44,11 @@ data:
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
           "targets": [
             {
-              "expr": "sum by (service) (rate(http_requests_total{namespace=\"{{ .Values.namespace }}\"}[5m]))",
+              "expr": "sum by (service) (rate(http_requests_total{job!=\"prometheus\"}[5m]))",
               "legendFormat": "{{`{{service}}`}}"
             },
             {
-              "expr": "sum by (service) (rate(http_server_requests_seconds_count{namespace=\"{{ .Values.namespace }}\"}[5m]))",
+              "expr": "sum by (service) (rate(http_server_requests_seconds_count{job!=\"prometheus\"}[5m]))",
               "legendFormat": "{{`{{service}}`}}"
             }
           ],
@@ -65,11 +65,11 @@ data:
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
           "targets": [
             {
-              "expr": "sum by (service) (rate(http_requests_total{namespace=\"{{ .Values.namespace }}\", code=~\"5..\"}[5m]))",
+              "expr": "sum by (service) (rate(http_requests_total{job!=\"prometheus\", code=~\"5..\"}[5m]))",
               "legendFormat": "{{`{{service}}`}}"
             },
             {
-              "expr": "sum by (service) (rate(http_server_requests_seconds_count{namespace=\"{{ .Values.namespace }}\", status=~\"5..\"}[5m]))",
+              "expr": "sum by (service) (rate(http_server_requests_seconds_count{job!=\"prometheus\", status=~\"5..\"}[5m]))",
               "legendFormat": "{{`{{service}}`}}"
             }
           ],
@@ -87,11 +87,11 @@ data:
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
           "targets": [
             {
-              "expr": "histogram_quantile(0.50, sum by (service, le) (rate(http_request_duration_seconds_bucket{namespace=\"{{ .Values.namespace }}\"}[5m])))",
+              "expr": "histogram_quantile(0.50, sum by (service, le) (rate(http_request_duration_seconds_bucket{job!=\"prometheus\"}[5m])))",
               "legendFormat": "{{`{{service}}`}}"
             },
             {
-              "expr": "histogram_quantile(0.50, sum by (service, le) (rate(http_server_requests_seconds_bucket{namespace=\"{{ .Values.namespace }}\"}[5m])))",
+              "expr": "histogram_quantile(0.50, sum by (service, le) (rate(http_server_requests_seconds_bucket{job!=\"prometheus\"}[5m])))",
               "legendFormat": "{{`{{service}}`}}"
             }
           ],
@@ -108,11 +108,11 @@ data:
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
           "targets": [
             {
-              "expr": "histogram_quantile(0.99, sum by (service, le) (rate(http_request_duration_seconds_bucket{namespace=\"{{ .Values.namespace }}\"}[5m])))",
+              "expr": "histogram_quantile(0.99, sum by (service, le) (rate(http_request_duration_seconds_bucket{job!=\"prometheus\"}[5m])))",
               "legendFormat": "{{`{{service}}`}}"
             },
             {
-              "expr": "histogram_quantile(0.99, sum by (service, le) (rate(http_server_requests_seconds_bucket{namespace=\"{{ .Values.namespace }}\"}[5m])))",
+              "expr": "histogram_quantile(0.99, sum by (service, le) (rate(http_server_requests_seconds_bucket{job!=\"prometheus\"}[5m])))",
               "legendFormat": "{{`{{service}}`}}"
             }
           ],
@@ -129,7 +129,7 @@ data:
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
           "targets": [
             {
-              "expr": "sum by (pod) (rate(process_cpu_seconds_total{namespace=\"{{ .Values.namespace }}\"}[5m]))",
+              "expr": "sum by (pod) (rate(process_cpu_seconds_total{job!=\"prometheus\"}[5m]))",
               "legendFormat": "{{`{{pod}}`}}"
             }
           ],
@@ -146,7 +146,7 @@ data:
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
           "targets": [
             {
-              "expr": "sum by (pod) (process_resident_memory_bytes{namespace=\"{{ .Values.namespace }}\"})",
+              "expr": "sum by (pod) (process_resident_memory_bytes{job!=\"prometheus\"})",
               "legendFormat": "{{`{{pod}}`}}"
             }
           ],

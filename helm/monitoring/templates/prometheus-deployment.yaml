@@ -15,7 +15,6 @@ spec:
       labels:
         app: prometheus
     spec:
-      serviceAccountName: {{ include "monitoring.fullname" . }}-prometheus
       containers:
         - name: prometheus
           image: {{ .Values.prometheus.image }}
