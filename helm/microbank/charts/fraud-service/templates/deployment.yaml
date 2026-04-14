@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fraud-service.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "fraud-service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "fraud-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "fraud-service.selectorLabels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8084"
+        prometheus.io/path: "/metrics"
+        {{- if .Values.global.serviceMesh.enabled }}
+        sidecar.istio.io/inject: "true"
+        {{- end }}
+    spec:
+      containers:
+        - name: fraud-service
+          image: "{{ .Values.global.imageRegistry }}/microbank-fraud-service:{{ .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 8084
+              name: http
+          env:
+            - name: PORT
+              value: "8084"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8084
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8084
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

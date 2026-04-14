@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "auth-service.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "auth-service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "auth-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "auth-service.selectorLabels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+        prometheus.io/path: "/metrics"
+        {{- if .Values.global.serviceMesh.enabled }}
+        sidecar.istio.io/inject: "true"
+        {{- end }}
+    spec:
+      containers:
+        - name: auth-service
+          image: "{{ .Values.global.imageRegistry }}/microbank-auth-service:{{ .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 8081
+              name: http
+          env:
+            - name: PORT
+              value: "8081"
+            - name: DB_HOST
+              value: {{ printf "%s-postgres" .Release.Name | quote }}
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: {{ .Values.database | quote }}
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-db-credentials
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-db-credentials
+                  key: password
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "postgres.fullname" . }}-init
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+data:
+  init.sql: |
+    CREATE DATABASE auth_db;
+    CREATE DATABASE account_db;
+    CREATE DATABASE transaction_db;
+    CREATE DATABASE audit_db;

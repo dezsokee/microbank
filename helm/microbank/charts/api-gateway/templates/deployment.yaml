@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "api-gateway.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "api-gateway.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "api-gateway.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "api-gateway.selectorLabels" . | nindent 8 }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+        {{- if .Values.global.serviceMesh.enabled }}
+        sidecar.istio.io/inject: "true"
+        {{- end }}
+    spec:
+      containers:
+        - name: api-gateway
+          image: "{{ .Values.global.imageRegistry }}/microbank-api-gateway:{{ .Values.global.imageTag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: PORT
+              value: "8080"
+            - name: AUTH_SERVICE_URL
+              value: {{ printf "http://%s-auth-service:8081" .Release.Name | quote }}
+            - name: ACCOUNT_SERVICE_URL
+              value: {{ printf "http://%s-account-service:8082" .Release.Name | quote }}
+            - name: TRANSACTION_SERVICE_URL
+              value: {{ printf "http://%s-transaction-service:8083" .Release.Name | quote }}
+            - name: EXCHANGE_SERVICE_URL
+              value: {{ printf "http://%s-exchange-service:8085" .Release.Name | quote }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

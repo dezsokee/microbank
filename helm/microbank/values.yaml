@@ -1,0 +1,121 @@
+global:
+  namespace: student-research
+  imageRegistry: ghcr.io/dezsokee
+  imagePullPolicy: IfNotPresent
+  imageTag: latest
+  postgresql:
+    host: ""  # Computed as {{ .Release.Name }}-postgres in templates
+    port: 5432
+    username: microbank
+    password: microbank
+  serviceMesh:
+    enabled: false
+  prometheus:
+    enabled: true
+
+ingress:
+  enabled: true
+  className: nginx
+  host: microbank.local
+  tls: []
+
+# --- Subchart overrides ---
+
+postgres:
+  storage:
+    size: 1Gi
+    storageClass: ""
+
+api-gateway:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 64Mi
+
+auth-service:
+  replicaCount: 1
+  database: auth_db
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 64Mi
+
+account-service:
+  replicaCount: 1
+  database: account_db
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+transaction-service:
+  replicaCount: 1
+  database: transaction_db
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+fraud-service:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 64Mi
+
+exchange-service:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+notification-service:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+audit-service:
+  replicaCount: 1
+  database: audit_db
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+frontend:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 64Mi

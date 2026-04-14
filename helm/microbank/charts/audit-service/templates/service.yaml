@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "audit-service.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "audit-service.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8087
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "audit-service.selectorLabels" . | nindent 4 }}
