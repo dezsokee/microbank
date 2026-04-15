@@ -20,21 +20,21 @@ data:
       - job_name: "api-gateway"
         metrics_path: /metrics
         static_configs:
-          - targets: ["{{ .Release.Name }}-api-gateway:8080"]
+          - targets: ["{{ .Values.microbankReleaseName }}-api-gateway:8080"]
             labels:
               service: api-gateway
 
       - job_name: "auth-service"
         metrics_path: /metrics
         static_configs:
-          - targets: ["{{ .Release.Name }}-auth-service:8081"]
+          - targets: ["{{ .Values.microbankReleaseName }}-auth-service:8081"]
             labels:
               service: auth-service
 
       - job_name: "fraud-service"
         metrics_path: /metrics
         static_configs:
-          - targets: ["{{ .Release.Name }}-fraud-service:8084"]
+          - targets: ["{{ .Values.microbankReleaseName }}-fraud-service:8084"]
             labels:
               service: fraud-service
 
@@ -42,21 +42,21 @@ data:
       - job_name: "account-service"
         metrics_path: /actuator/prometheus
         static_configs:
-          - targets: ["{{ .Release.Name }}-account-service:8082"]
+          - targets: ["{{ .Values.microbankReleaseName }}-account-service:8082"]
             labels:
               service: account-service
 
       - job_name: "transaction-service"
         metrics_path: /actuator/prometheus
         static_configs:
-          - targets: ["{{ .Release.Name }}-transaction-service:8083"]
+          - targets: ["{{ .Values.microbankReleaseName }}-transaction-service:8083"]
             labels:
               service: transaction-service
 
       - job_name: "audit-service"
         metrics_path: /actuator/prometheus
         static_configs:
-          - targets: ["{{ .Release.Name }}-audit-service:8087"]
+          - targets: ["{{ .Values.microbankReleaseName }}-audit-service:8087"]
             labels:
               service: audit-service
 
@@ -64,13 +64,13 @@ data:
       - job_name: "exchange-service"
         metrics_path: /metrics
         static_configs:
-          - targets: ["{{ .Release.Name }}-exchange-service:8085"]
+          - targets: ["{{ .Values.microbankReleaseName }}-exchange-service:8085"]
             labels:
               service: exchange-service
 
       - job_name: "notification-service"
         metrics_path: /metrics
         static_configs:
-          - targets: ["{{ .Release.Name }}-notification-service:8086"]
+          - targets: ["{{ .Values.microbankReleaseName }}-notification-service:8086"]
             labels:
               service: notification-service

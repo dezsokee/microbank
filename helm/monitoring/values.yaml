@@ -1,4 +1,5 @@
 namespace: student-research
+microbankReleaseName: microbank
 
 prometheus:
   image: prom/prometheus:v2.51.0
