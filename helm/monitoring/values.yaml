@@ -1,0 +1,36 @@
+namespace: student-research
+microbankReleaseName: microbank
+
+prometheus:
+  image: prom/prometheus:v2.51.0
+  replicas: 1
+  storage:
+    size: 2Gi
+    storageClass: ""
+  retention: 15d
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+grafana:
+  image: grafana/grafana:10.4.1
+  replicas: 1
+  adminUser: admin
+  adminPassword: admin
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+
+ingress:
+  enabled: true
+  className: nginx
+  grafanaHost: grafana.microbank.local
+  prometheusHost: prometheus.microbank.local

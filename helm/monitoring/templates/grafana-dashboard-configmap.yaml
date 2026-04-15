@@ -1,0 +1,384 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "monitoring.fullname" . }}-grafana-dashboards
+  labels:
+    app: grafana
+    {{- include "monitoring.labels" . | nindent 4 }}
+data:
+  microbank-overview.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [],
+      "panels": [
+        {
+          "title": "Service Health Overview",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "expr": "count(up{job!=\"prometheus\"} == 1)",
+              "legendFormat": "Healthy"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 5 },
+                  { "color": "green", "value": 8 }
+                ]
+              },
+              "unit": "none",
+              "displayName": "Services Up"
+            }
+          }
+        },
+        {
+          "title": "Request Rate by Service",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+          "targets": [
+            {
+              "expr": "sum by (service) (rate(http_requests_total{job!=\"prometheus\"}[5m]))",
+              "legendFormat": "{{`{{service}}`}}"
+            },
+            {
+              "expr": "sum by (service) (rate(http_server_requests_seconds_count{job!=\"prometheus\"}[5m]))",
+              "legendFormat": "{{`{{service}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "Error Rate by Service (5xx)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+          "targets": [
+            {
+              "expr": "sum by (service) (rate(http_requests_total{job!=\"prometheus\", status=~\"5..\"}[5m]))",
+              "legendFormat": "{{`{{service}}`}}"
+            },
+            {
+              "expr": "sum by (service) (rate(http_server_requests_seconds_count{job!=\"prometheus\", status=~\"5..\"}[5m]))",
+              "legendFormat": "{{`{{service}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 },
+              "color": { "mode": "palette-classic" }
+            }
+          }
+        },
+        {
+          "title": "P50 Latency by Service",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (service, le) (rate(http_request_duration_seconds_bucket{job!=\"prometheus\"}[5m])))",
+              "legendFormat": "{{`{{service}}`}}"
+            },
+            {
+              "expr": "histogram_quantile(0.50, sum by (service, le) (rate(http_server_requests_seconds_bucket{job!=\"prometheus\"}[5m])))",
+              "legendFormat": "{{`{{service}}`}}"
+            },
+            {
+              "expr": "histogram_quantile(0.50, sum by (service, le) (rate(http_requests_duration_seconds_bucket{job!=\"prometheus\"}[5m])))",
+              "legendFormat": "{{`{{service}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "P99 Latency by Service",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum by (service, le) (rate(http_request_duration_seconds_bucket{job!=\"prometheus\"}[5m])))",
+              "legendFormat": "{{`{{service}}`}}"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (service, le) (rate(http_server_requests_seconds_bucket{job!=\"prometheus\"}[5m])))",
+              "legendFormat": "{{`{{service}}`}}"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (service, le) (rate(http_requests_duration_seconds_bucket{job!=\"prometheus\"}[5m])))",
+              "legendFormat": "{{`{{service}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "CPU Usage by Pod",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+          "targets": [
+            {
+              "expr": "sum by (pod) (rate(process_cpu_seconds_total{job!=\"prometheus\"}[5m]))",
+              "legendFormat": "{{`{{pod}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "Memory Usage by Pod",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+          "targets": [
+            {
+              "expr": "sum by (pod) (process_resident_memory_bytes{job!=\"prometheus\"})",
+              "legendFormat": "{{`{{pod}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "Request Rate per Endpoint (API Gateway)",
+          "type": "table",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 28 },
+          "targets": [
+            {
+              "expr": "sum by (method, path) (rate(http_requests_total{service=~\".*api-gateway.*\"}[5m]))",
+              "format": "table",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "reqps" }
+          }
+        },
+        {
+          "title": "Avg Response Time by Service",
+          "type": "timeseries",
+          "description": "Average request duration per service. Shifts upward when mTLS handshake cost is amortized into per-request latency.",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+          "targets": [
+            {
+              "expr": "sum by (service) (rate(http_request_duration_seconds_sum{job!=\"prometheus\"}[5m])) / sum by (service) (rate(http_request_duration_seconds_count{job!=\"prometheus\"}[5m]))",
+              "legendFormat": "{{`{{service}}`}}"
+            },
+            {
+              "expr": "sum by (service) (rate(http_server_requests_seconds_sum{job!=\"prometheus\"}[5m])) / sum by (service) (rate(http_server_requests_seconds_count{job!=\"prometheus\"}[5m]))",
+              "legendFormat": "{{`{{service}}`}}"
+            },
+            {
+              "expr": "sum by (service) (rate(http_requests_duration_seconds_sum{job!=\"prometheus\"}[5m])) / sum by (service) (rate(http_requests_duration_seconds_count{job!=\"prometheus\"}[5m]))",
+              "legendFormat": "{{`{{service}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "P95 Latency by Service",
+          "type": "timeseries",
+          "description": "95th percentile latency. mTLS typically shifts P95 before P99 (which is GC-dominated).",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (service, le) (rate(http_request_duration_seconds_bucket{job!=\"prometheus\"}[5m])))",
+              "legendFormat": "{{`{{service}}`}}"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (service, le) (rate(http_server_requests_seconds_bucket{job!=\"prometheus\"}[5m])))",
+              "legendFormat": "{{`{{service}}`}}"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (service, le) (rate(http_requests_duration_seconds_bucket{job!=\"prometheus\"}[5m])))",
+              "legendFormat": "{{`{{service}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "Latency Distribution Heatmap — API Gateway",
+          "type": "heatmap",
+          "description": "Full latency distribution over time. Under mTLS a second band appears (new handshake vs reused connection) — invisible on percentile charts.",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 44 },
+          "targets": [
+            {
+              "expr": "sum by (le) (rate(http_request_duration_seconds_bucket{service=\"api-gateway\"}[1m]))",
+              "format": "heatmap",
+              "legendFormat": "{{`{{le}}`}}"
+            }
+          ],
+          "options": {
+            "calculate": false,
+            "yAxis": { "unit": "s" },
+            "color": { "scheme": "Spectral", "mode": "scheme" },
+            "cellGap": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "scaleDistribution": { "type": "linear" },
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false }
+              }
+            }
+          }
+        },
+        {
+          "title": "Transfer Flow: End-to-End vs Sub-Call P95 Latency",
+          "type": "timeseries",
+          "description": "Full transfer (api-gateway) latency vs per-service latency for the downstream account/transaction services. Gap between top line and sub-call lines = cumulative mTLS overhead across hops.",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 52 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{service=\"api-gateway\", path=~\".*transfer.*\"}[5m])))",
+              "legendFormat": "end-to-end (api-gateway transfer)"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (service, le) (rate(http_server_requests_seconds_bucket{service=~\"account-service|transaction-service|audit-service\"}[5m])))",
+              "legendFormat": "{{`{{service}}`}}"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (service, le) (rate(http_request_duration_seconds_bucket{service=\"fraud-service\"}[5m])))",
+              "legendFormat": "fraud-service"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (service, le) (rate(http_requests_duration_seconds_bucket{service=~\"exchange-service|notification-service\"}[5m])))",
+              "legendFormat": "{{`{{service}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": { "drawStyle": "line", "fillOpacity": 5, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "Goroutines / JVM Live Threads by Pod",
+          "type": "timeseries",
+          "description": "Concurrency primitives in flight. Sustained rise under load can indicate handshake storms or connection-pool exhaustion under mTLS.",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 60 },
+          "targets": [
+            {
+              "expr": "go_goroutines{job!=\"prometheus\"}",
+              "legendFormat": "{{`{{pod}}`}} (go)"
+            },
+            {
+              "expr": "jvm_threads_live_threads",
+              "legendFormat": "{{`{{pod}}`}} (jvm)"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "custom": { "drawStyle": "line", "fillOpacity": 5, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "GC Pause Time by Service",
+          "type": "timeseries",
+          "description": "Time spent in garbage collection per second. mTLS increases heap pressure (cert chains, session caches); GC spikes here often explain P99 degradation.",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 60 },
+          "targets": [
+            {
+              "expr": "sum by (service) (rate(go_gc_duration_seconds_sum[5m]))",
+              "legendFormat": "{{`{{service}}`}} (go)"
+            },
+            {
+              "expr": "sum by (service) (rate(jvm_gc_pause_seconds_sum[5m]))",
+              "legendFormat": "{{`{{service}}`}} (jvm)"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "Open File Descriptors by Pod",
+          "type": "timeseries",
+          "description": "Each TLS connection holds an FD. Climbing FD count under mTLS is an early sign of connection churn (pool misses → full handshakes).",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 68 },
+          "targets": [
+            {
+              "expr": "process_open_fds{job!=\"prometheus\"}",
+              "legendFormat": "{{`{{pod}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "custom": { "drawStyle": "line", "fillOpacity": 5, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "Total Cluster Throughput",
+          "type": "stat",
+          "description": "Aggregate req/s across all services — one anchor number per load-test run. Compare mTLS on vs off across side-by-side browser tabs.",
+          "gridPos": { "h": 4, "w": 12, "x": 12, "y": 68 },
+          "targets": [
+            {
+              "expr": "sum(rate(http_requests_total{job!=\"prometheus\"}[1m])) + sum(rate(http_server_requests_seconds_count{job!=\"prometheus\"}[1m])) + sum(rate(http_requests_duration_seconds_count{job!=\"prometheus\"}[1m]))",
+              "legendFormat": "total"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "thresholds": {
+                "steps": [
+                  { "color": "blue", "value": null }
+                ]
+              },
+              "displayName": "Total req/s"
+            }
+          }
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["microbank", "overview", "mtls"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "MicroBank Overview",
+      "uid": "microbank-overview"
+    }
