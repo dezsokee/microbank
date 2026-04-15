@@ -33,3 +33,4 @@ ingress:
   enabled: true
   className: nginx
   grafanaHost: grafana.microbank.local
+  prometheusHost: prometheus.microbank.local

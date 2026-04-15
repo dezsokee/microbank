@@ -20,4 +20,14 @@ spec:
                 name: {{ include "monitoring.fullname" . }}-grafana
                 port:
                   number: 3000
+    - host: {{ .Values.ingress.prometheusHost }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "monitoring.fullname" . }}-prometheus
+                port:
+                  number: 9090
 {{- end }}
