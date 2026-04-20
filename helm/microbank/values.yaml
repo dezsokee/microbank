@@ -1,7 +1,7 @@
 global:
   namespace: student-research
   imageRegistry: ghcr.io/dezsokee
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
   imageTag: latest
   postgresql:
     host: ""  # Computed as {{ .Release.Name }}-postgres in templates

@@ -15,52 +15,65 @@ export const options = {
   },
 };
 
-// Pre-seeded users
+// Pre-seeded users — assign each VU a dedicated user to avoid token conflicts.
+// With 3 users and up to 10 VUs, VUs sharing a user are grouped so at most
+// one VU per user is active at any time on the same user slot.
 const users = ['alice', 'bob', 'charlie'];
 
-function login(username) {
+// VU-local state: token is cached and only refreshed on 401.
+let token = null;
+const username = users[(__VU - 1) % users.length];
+
+function login() {
   const res = http.post(`${BASE_URL}/api/v1/auth/login`, JSON.stringify({ username }), {
     headers: { 'Content-Type': 'application/json' },
   });
   check(res, { 'login success': (r) => r.status === 200 });
-  return res.json().token;
+  token = res.json('token');
 }
 
-export default function () {
-  const username = users[Math.floor(Math.random() * users.length)];
-  const token = login(username);
-  const authHeaders = {
+function authHeaders() {
+  return {
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
   };
+}
+
+export default function () {
+  // Login once per VU; re-login if token was invalidated by a competing VU.
+  if (!token) {
+    login();
+  }
 
   // Get accounts
-  const accountsRes = http.get(`${BASE_URL}/api/v1/accounts/me`, authHeaders);
+  const accountsRes = http.get(`${BASE_URL}/api/v1/accounts/me`, authHeaders());
+  if (accountsRes.status === 401) { login(); return; }
   check(accountsRes, { 'get accounts': (r) => r.status === 200 });
 
   // Get balance
-  const balanceRes = http.get(`${BASE_URL}/api/v1/accounts/me/balance`, authHeaders);
+  const balanceRes = http.get(`${BASE_URL}/api/v1/accounts/me/balance`, authHeaders());
+  if (balanceRes.status === 401) { login(); return; }
   check(balanceRes, { 'get balance': (r) => r.status === 200 });
 
   // Get exchange rates
-  const ratesRes = http.get(`${BASE_URL}/api/v1/exchange-rates`, authHeaders);
+  const ratesRes = http.get(`${BASE_URL}/api/v1/exchange-rates`, authHeaders());
+  if (ratesRes.status === 401) { login(); return; }
   check(ratesRes, { 'get rates': (r) => r.status === 200 });
 
-  // Make a transfer (small amount between accounts)
-  // Parse accounts to get IDs
+  // Make a transfer
   if (accountsRes.status === 200) {
     const accounts = accountsRes.json();
     if (accounts && accounts.length > 0) {
       const fromAccount = accounts[0].id;
-      // Use a known account as target (just pick a different one)
       const transferRes = http.post(`${BASE_URL}/api/v1/transactions/transfer`, JSON.stringify({
         fromAccountId: fromAccount,
-        toAccountId: fromAccount, // self-transfer for simplicity in testing
+        toAccountId: fromAccount,
         amount: 1.00,
         currency: accounts[0].currency || 'EUR',
-      }), authHeaders);
+      }), authHeaders());
+      if (transferRes.status === 401) { login(); return; }
       check(transferRes, { 'transfer': (r) => r.status === 200 || r.status === 400 });
     }
   }
@@ -69,7 +82,8 @@ export default function () {
   if (accountsRes.status === 200) {
     const accounts = accountsRes.json();
     if (accounts && accounts.length > 0) {
-      const txRes = http.get(`${BASE_URL}/api/v1/transactions?accountId=${accounts[0].id}`, authHeaders);
+      const txRes = http.get(`${BASE_URL}/api/v1/transactions?accountId=${accounts[0].id}`, authHeaders());
+      if (txRes.status === 401) { login(); return; }
       check(txRes, { 'get transactions': (r) => r.status === 200 });
     }
   }
