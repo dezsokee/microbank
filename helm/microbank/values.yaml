@@ -9,7 +9,7 @@ global:
     username: microbank
     password: microbank
   serviceMesh:
-    enabled: false
+    enabled: true
   prometheus:
     enabled: true
 
