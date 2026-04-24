@@ -15,7 +15,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: microbank-api-gateway
+      app.kubernetes.io/name: api-gateway
   mtls:
     mode: STRICT
   portLevelMtls:
@@ -30,7 +30,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: microbank-frontend
+      app.kubernetes.io/name: frontend
   mtls:
     mode: STRICT
   portLevelMtls:
