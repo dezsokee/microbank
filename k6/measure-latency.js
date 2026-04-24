@@ -13,6 +13,7 @@ const svcTransaction = new Trend('svc_transaction_service',  true);
 const svcTxHistory   = new Trend('svc_tx_history',           true);
 
 export const options = {
+  insecureSkipTLSVerify: true,
   stages: [
     { duration: '1m', target: 10 },
     { duration: '3m', target: 10 },
