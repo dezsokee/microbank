@@ -34,5 +34,5 @@ spec:
   mtls:
     mode: STRICT
   portLevelMtls:
-    "3000":
+    "80":
       mode: PERMISSIVE
