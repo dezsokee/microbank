@@ -6,3 +6,8 @@ metadata:
 spec:
   mtls:
     mode: STRICT
+  portLevelMtls:
+    "8080":
+      mode: PERMISSIVE
+    "3000":
+      mode: PERMISSIVE
