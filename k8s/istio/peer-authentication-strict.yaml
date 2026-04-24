@@ -36,3 +36,33 @@ spec:
   portLevelMtls:
     "80":
       mode: PERMISSIVE
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: monitoring-grafana-ingress
+  namespace: student-research
+spec:
+  selector:
+    matchLabels:
+      app: grafana
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    "3000":
+      mode: PERMISSIVE
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: monitoring-prometheus-ingress
+  namespace: student-research
+spec:
+  selector:
+    matchLabels:
+      app: prometheus
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    "9090":
+      mode: PERMISSIVE
