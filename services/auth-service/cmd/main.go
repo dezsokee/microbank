@@ -199,17 +199,25 @@ func initDB(cfg Config) *sql.DB {
 		log.Fatalf("failed to count users: %v", err)
 	}
 	if count == 0 {
-		seedUsers := []string{"alice", "bob", "charlie"}
-		for _, username := range seedUsers {
+		// IDs must match the hardcoded UUIDs in account-service seed data.
+		seedUsers := []struct {
+			id       string
+			username string
+		}{
+			{"00000000-0000-0000-0000-000000000001", "alice"},
+			{"00000000-0000-0000-0000-000000000002", "bob"},
+			{"00000000-0000-0000-0000-000000000003", "charlie"},
+		}
+		for _, u := range seedUsers {
 			token := uuid.New().String()
 			_, err := db.Exec(
 				"INSERT INTO users (id, username, token) VALUES ($1, $2, $3)",
-				uuid.New().String(), username, token,
+				u.id, u.username, token,
 			)
 			if err != nil {
-				log.Fatalf("failed to seed user %s: %v", username, err)
+				log.Fatalf("failed to seed user %s: %v", u.username, err)
 			}
-			jsonLog("INFO", fmt.Sprintf("Seeded user: %s", username))
+			jsonLog("INFO", fmt.Sprintf("Seeded user: %s", u.username))
 		}
 	}
 
