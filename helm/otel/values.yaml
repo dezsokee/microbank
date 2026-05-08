@@ -5,11 +5,11 @@ otelCollector:
   replicas: 1
   resources:
     requests:
-      cpu: 100m
-      memory: 256Mi
+      cpu: 25m
+      memory: 64Mi
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 200m
+      memory: 128Mi
 
 honeycomb:
   apiKey: ""
