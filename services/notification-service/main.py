@@ -55,10 +55,10 @@ otel_resource = Resource.create({
 })
 
 tracer_provider = TracerProvider(resource=otel_resource)
-tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(insecure=True)))
 trace.set_tracer_provider(tracer_provider)
 
-metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter())
+metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter(insecure=True))
 meter_provider = MeterProvider(resource=otel_resource, metric_readers=[metric_reader])
 metrics.set_meter_provider(meter_provider)
 
