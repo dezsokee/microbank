@@ -11,6 +11,16 @@ from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field
 
+from opentelemetry import trace, metrics
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
 # ---------------------------------------------------------------------------
 # JSON logging to stdout
 # ---------------------------------------------------------------------------
@@ -35,6 +45,22 @@ logging.root.handlers = [handler]
 logging.root.setLevel(logging.INFO)
 
 logger = logging.getLogger("notification-service")
+
+# ---------------------------------------------------------------------------
+# OpenTelemetry initialization
+# ---------------------------------------------------------------------------
+
+otel_resource = Resource.create({
+    "service.name": os.environ.get("OTEL_SERVICE_NAME", "notification-service"),
+})
+
+tracer_provider = TracerProvider(resource=otel_resource)
+tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+trace.set_tracer_provider(tracer_provider)
+
+metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter())
+meter_provider = MeterProvider(resource=otel_resource, metric_readers=[metric_reader])
+metrics.set_meter_provider(meter_provider)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -98,6 +124,7 @@ app = FastAPI(
 
 # Prometheus metrics
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+FastAPIInstrumentor.instrument_app(app)
 
 # ---------------------------------------------------------------------------
 # Exception handlers

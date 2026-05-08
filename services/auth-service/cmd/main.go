@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -15,7 +16,66 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 )
+
+// ---------------------------------------------------------------------------
+// OpenTelemetry initialization
+// ---------------------------------------------------------------------------
+
+func initOTel(ctx context.Context, serviceName string) (func(), error) {
+	res, err := resource.New(ctx,
+		resource.WithAttributes(
+			semconv.ServiceName(serviceName),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource: %w", err)
+	}
+
+	traceExporter, err := otlptracegrpc.New(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create trace exporter: %w", err)
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(traceExporter),
+		sdktrace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+
+	metricExporter, err := otlpmetricgrpc.New(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create metric exporter: %w", err)
+	}
+
+	mp := sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter)),
+		sdkmetric.WithResource(res),
+	)
+	otel.SetMeterProvider(mp)
+
+	shutdown := func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tp.Shutdown(shutdownCtx)
+		_ = mp.Shutdown(shutdownCtx)
+	}
+
+	return shutdown, nil
+}
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -349,6 +409,15 @@ func handleReadyz(db *sql.DB) http.HandlerFunc {
 // ---------------------------------------------------------------------------
 
 func main() {
+	ctx := context.Background()
+
+	shutdown, err := initOTel(ctx, "auth-service")
+	if err != nil {
+		jsonLog("ERROR", fmt.Sprintf("failed to initialize OpenTelemetry: %v", err))
+	} else {
+		defer shutdown()
+	}
+
 	cfg := loadConfig()
 
 	jsonLog("INFO", "Starting auth-service")
@@ -358,6 +427,9 @@ func main() {
 
 	r := chi.NewRouter()
 	r.Use(metricsMiddleware)
+	r.Use(func(next http.Handler) http.Handler {
+		return otelhttp.NewHandler(next, "auth-service")
+	})
 
 	// Public API
 	r.Post("/api/v1/auth/register", handleRegister(db))

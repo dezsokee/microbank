@@ -12,6 +12,9 @@ global:
     enabled: true
   prometheus:
     enabled: true
+  otel:
+    enabled: true
+    endpoint: "http://otel-otel-collector:4317"
 
 ingress:
   enabled: true

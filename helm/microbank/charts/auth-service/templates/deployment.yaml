@@ -48,6 +48,12 @@ spec:
                 secretKeyRef:
                   name: {{ .Release.Name }}-db-credentials
                   key: password
+            {{- if .Values.global.otel.enabled }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.global.otel.endpoint | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: "auth-service"
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz

@@ -1,0 +1,18 @@
+namespace: student-research
+
+otelCollector:
+  image: otel/opentelemetry-collector-contrib:0.100.0
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+honeycomb:
+  apiKey: ""
+  endpoint: "api.honeycomb.io:443"
+
+environment: development
