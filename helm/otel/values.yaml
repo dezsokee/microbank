@@ -15,4 +15,7 @@ honeycomb:
   apiKey: ""
   endpoint: "api.honeycomb.io:443"
 
+serviceMesh:
+  enabled: true
+
 environment: development
