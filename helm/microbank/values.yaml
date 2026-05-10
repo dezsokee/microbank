@@ -14,7 +14,7 @@ global:
     enabled: true
   otel:
     enabled: true
-    endpoint: "http://otel-otel-collector:4317"
+    endpoint: "http://otel-otel-collector:4318"
 
 ingress:
   enabled: true

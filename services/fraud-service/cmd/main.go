@@ -17,8 +17,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -40,8 +40,8 @@ func initOTel(ctx context.Context, serviceName string) (func(), error) {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
 	}
 
-	traceExporter, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithInsecure(),
+	traceExporter, err := otlptracehttp.New(ctx,
+		otlptracehttp.WithInsecure(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create trace exporter: %w", err)
@@ -57,8 +57,8 @@ func initOTel(ctx context.Context, serviceName string) (func(), error) {
 		propagation.Baggage{},
 	))
 
-	metricExporter, err := otlpmetricgrpc.New(ctx,
-		otlpmetricgrpc.WithInsecure(),
+	metricExporter, err := otlpmetrichttp.New(ctx,
+		otlpmetrichttp.WithInsecure(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metric exporter: %w", err)

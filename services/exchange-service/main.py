@@ -14,10 +14,10 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from opentelemetry import trace, metrics
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
@@ -56,10 +56,10 @@ otel_resource = Resource.create({
 })
 
 tracer_provider = TracerProvider(resource=otel_resource)
-tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(insecure=True)))
+tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
 trace.set_tracer_provider(tracer_provider)
 
-metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter(insecure=True))
+metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter())
 meter_provider = MeterProvider(resource=otel_resource, metric_readers=[metric_reader])
 metrics.set_meter_provider(meter_provider)
 
