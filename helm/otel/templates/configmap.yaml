@@ -27,27 +27,34 @@ data:
             action: upsert
 
     exporters:
-      otlp/honeycomb:
-        endpoint: {{ .Values.honeycomb.endpoint }}
+      otlphttp/honeycomb:
+        endpoint: {{ .Values.honeycomb.endpoint | quote }}
         headers:
           x-honeycomb-team: "${env:HONEYCOMB_API_KEY}"
+      debug:
+        verbosity: basic
+        sampling_initial: 5
+        sampling_thereafter: 200
 
     extensions:
       health_check:
         endpoint: 0.0.0.0:13133
 
     service:
+      telemetry:
+        logs:
+          level: info
       extensions: [health_check]
       pipelines:
         traces:
           receivers: [otlp]
           processors: [batch, resource]
-          exporters: [otlp/honeycomb]
+          exporters: [otlphttp/honeycomb, debug]
         metrics:
           receivers: [otlp]
           processors: [batch, resource]
-          exporters: [otlp/honeycomb]
+          exporters: [otlphttp/honeycomb, debug]
         logs:
           receivers: [otlp]
           processors: [batch, resource]
-          exporters: [otlp/honeycomb]
+          exporters: [otlphttp/honeycomb, debug]

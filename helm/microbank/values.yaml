@@ -9,7 +9,7 @@ global:
     username: microbank
     password: microbank
   serviceMesh:
-    enabled: true
+    enabled: false
   prometheus:
     enabled: true
   otel:

@@ -13,9 +13,9 @@ otelCollector:
 
 honeycomb:
   apiKey: ""
-  endpoint: "api.honeycomb.io:443"
+  endpoint: "https://api.honeycomb.io"
 
 serviceMesh:
-  enabled: true
+  enabled: false
 
 environment: development
