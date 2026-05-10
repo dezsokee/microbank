@@ -50,9 +50,11 @@ logger = logging.getLogger("notification-service")
 # OpenTelemetry initialization
 # ---------------------------------------------------------------------------
 
-otel_resource = Resource.create({
-    "service.name": os.environ.get("OTEL_SERVICE_NAME", "notification-service"),
-})
+otel_resource = Resource.create(
+    {
+        "service.name": os.environ.get("OTEL_SERVICE_NAME", "notification-service"),
+    }
+)
 
 tracer_provider = TracerProvider(resource=otel_resource)
 tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
