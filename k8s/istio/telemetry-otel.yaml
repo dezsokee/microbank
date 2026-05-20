@@ -1,0 +1,10 @@
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: microbank-tracing
+  namespace: student-research
+spec:
+  tracing:
+    - providers:
+        - name: otel-collector
+      randomSamplingPercentage: 100
