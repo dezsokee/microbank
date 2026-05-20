@@ -16,6 +16,6 @@ honeycomb:
   endpoint: "https://api.honeycomb.io"
 
 serviceMesh:
-  enabled: false
+  enabled: true
 
 environment: development
