@@ -48,6 +48,20 @@ spec:
                 secretKeyRef:
                   name: {{ .Release.Name }}-db-credentials
                   key: password
+            {{- if .Values.global.otel.enabled }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.global.otel.endpoint | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: "account-service"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_METRICS_EXPORTER
+              value: "otlp"
+            - name: OTEL_LOGS_EXPORTER
+              value: "otlp"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
+            {{- end }}
           startupProbe:
             httpGet:
               path: /actuator/health

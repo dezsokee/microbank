@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-otel-collector
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: otel-collector
+spec:
+  replicas: {{ .Values.otelCollector.replicas }}
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: otel-collector
+          image: {{ .Values.otelCollector.image }}
+          args:
+            - "--config=/etc/otelcol-contrib/config.yaml"
+          env:
+            - name: HONEYCOMB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-honeycomb
+                  key: api-key
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+            - name: metrics
+              containerPort: 8888
+              protocol: TCP
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otelcol-contrib/config.yaml
+              subPath: config.yaml
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: {{ .Values.otelCollector.resources.requests.cpu }}
+              memory: {{ .Values.otelCollector.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.otelCollector.resources.limits.cpu }}
+              memory: {{ .Values.otelCollector.resources.limits.memory }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-otel-collector-config

@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-otel-collector-config
+  namespace: {{ .Values.namespace }}
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      batch:
+        timeout: 5s
+        send_batch_size: 1024
+      resource:
+        attributes:
+          - key: deployment.environment
+            value: {{ .Values.environment }}
+            action: upsert
+          - key: service.namespace
+            value: microbank
+            action: upsert
+
+    exporters:
+      otlphttp/honeycomb:
+        endpoint: {{ .Values.honeycomb.endpoint | quote }}
+        headers:
+          x-honeycomb-team: "${env:HONEYCOMB_API_KEY}"
+      debug:
+        verbosity: basic
+        sampling_initial: 5
+        sampling_thereafter: 200
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    service:
+      telemetry:
+        logs:
+          level: info
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch, resource]
+          exporters: [otlphttp/honeycomb, debug]
+        metrics:
+          receivers: [otlp]
+          processors: [batch, resource]
+          exporters: [otlphttp/honeycomb, debug]
+        logs:
+          receivers: [otlp]
+          processors: [batch, resource]
+          exporters: [otlphttp/honeycomb, debug]

@@ -40,6 +40,12 @@ spec:
               value: {{ printf "http://%s-transaction-service:8083" .Release.Name | quote }}
             - name: EXCHANGE_SERVICE_URL
               value: {{ printf "http://%s-exchange-service:8085" .Release.Name | quote }}
+            {{- if .Values.global.otel.enabled }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.global.otel.endpoint | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: "api-gateway"
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz

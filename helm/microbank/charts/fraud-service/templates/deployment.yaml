@@ -32,6 +32,12 @@ spec:
           env:
             - name: PORT
               value: "8084"
+            {{- if .Values.global.otel.enabled }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.global.otel.endpoint | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: "fraud-service"
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
