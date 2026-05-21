@@ -66,3 +66,15 @@ spec:
   portLevelMtls:
     "9090":
       mode: PERMISSIVE
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: otel-collector-plaintext
+  namespace: student-research
+spec:
+  selector:
+    matchLabels:
+      app: otel-collector
+  mtls:
+    mode: PERMISSIVE

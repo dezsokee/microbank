@@ -1,10 +1,21 @@
 apiVersion: networking.istio.io/v1beta1
 kind: DestinationRule
 metadata:
-  name: auth-service
+  name: microbank-mtls
   namespace: student-research
 spec:
   host: "*.student-research.svc.cluster.local"
   trafficPolicy:
     tls:
       mode: ISTIO_MUTUAL
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: otel-collector-plaintext
+  namespace: student-research
+spec:
+  host: otel-otel-collector.student-research.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: DISABLE

@@ -88,7 +88,6 @@ jobs:
 
   build-and-push:
     name: Build & Push
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: test
     permissions:
@@ -104,12 +103,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push image
-        working-directory: ${{ inputs.service_path }}
-        env:
-          IMAGE_TAG: ${{ env.REGISTRY }}/${{ github.repository_owner }}/microbank-${{ inputs.service_name }}:${{ github.sha }}
-          IMAGE_LATEST: ${{ env.REGISTRY }}/${{ github.repository_owner }}/microbank-${{ inputs.service_name }}:latest
+      - name: Compute image tags
+        id: tags
         run: |
-          docker build -t $IMAGE_TAG -t $IMAGE_LATEST .
-          docker push $IMAGE_TAG
-          docker push $IMAGE_LATEST
+          BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+          BRANCH_TAG=$(echo "$BRANCH" | tr '/_' '--' | tr -cd 'a-zA-Z0-9.-')
+          IMG="${{ env.REGISTRY }}/${{ github.repository_owner }}/microbank-${{ inputs.service_name }}"
+          TAGS="$IMG:${{ github.sha }},$IMG:branch-$BRANCH_TAG"
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            TAGS="$TAGS,$IMG:latest"
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.service_path }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
