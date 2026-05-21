@@ -8,3 +8,16 @@ spec:
     - providers:
         - name: otel-collector
       randomSamplingPercentage: 100
+      customTags:
+        source_workload:
+          environment:
+            name: WORKLOAD_NAME
+        source_namespace:
+          environment:
+            name: POD_NAMESPACE
+        source_service_account:
+          environment:
+            name: SERVICE_ACCOUNT
+        mesh_id:
+          environment:
+            name: ISTIO_META_MESH_ID
