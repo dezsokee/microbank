@@ -14,11 +14,14 @@ spec:
       port: 4317
       targetPort: otlp-grpc
       protocol: TCP
+      appProtocol: grpc
     - name: otlp-http
       port: 4318
       targetPort: otlp-http
       protocol: TCP
+      appProtocol: http
     - name: metrics
       port: 8888
       targetPort: metrics
       protocol: TCP
+      appProtocol: http
