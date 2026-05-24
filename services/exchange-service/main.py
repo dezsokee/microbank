@@ -76,7 +76,7 @@ HTTPXClientInstrumentor().instrument()
 
 PORT = int(os.getenv("PORT", "8085"))
 
-RATES_API_URL = os.getenv("RATES_API_URL", "https://api.exchangerate.host/latest")
+RATES_API_URL = os.getenv("RATES_API_URL", "https://api.frankfurter.dev/v1/latest")
 RATES_CACHE_TTL_SECONDS = int(os.getenv("RATES_CACHE_TTL_SECONDS", "300"))
 RATES_API_TIMEOUT_SECONDS = float(os.getenv("RATES_API_TIMEOUT_SECONDS", "3.0"))
 

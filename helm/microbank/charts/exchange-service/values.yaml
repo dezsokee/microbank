@@ -9,6 +9,6 @@ resources:
     memory: 128Mi
 
 rates:
-  apiUrl: "https://api.exchangerate.host/latest"
+  apiUrl: "https://api.frankfurter.dev/v1/latest"
   cacheTtlSeconds: 300
   apiTimeoutSeconds: 3.0

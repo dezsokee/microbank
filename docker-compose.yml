@@ -75,7 +75,7 @@ services:
       - "8085:8085"
     environment:
       PORT: "8085"
-      RATES_API_URL: "https://api.exchangerate.host/latest"
+      RATES_API_URL: "https://api.frankfurter.dev/v1/latest"
       RATES_CACHE_TTL_SECONDS: "300"
       RATES_API_TIMEOUT_SECONDS: "3.0"
     healthcheck:
