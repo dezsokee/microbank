@@ -1,11 +1,13 @@
 import logging
 import json
 import os
-import random
 import sys
+import threading
+import time
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -20,6 +22,7 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 
 # ---------------------------------------------------------------------------
@@ -65,13 +68,19 @@ metric_reader = PeriodicExportingMetricReader(OTLPMetricExporter())
 meter_provider = MeterProvider(resource=otel_resource, metric_readers=[metric_reader])
 metrics.set_meter_provider(meter_provider)
 
+HTTPXClientInstrumentor().instrument()
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
 PORT = int(os.getenv("PORT", "8085"))
 
-BASE_RATES: dict[str, float] = {
+RATES_API_URL = os.getenv("RATES_API_URL", "https://api.frankfurter.dev/v1/latest")
+RATES_CACHE_TTL_SECONDS = int(os.getenv("RATES_CACHE_TTL_SECONDS", "300"))
+RATES_API_TIMEOUT_SECONDS = float(os.getenv("RATES_API_TIMEOUT_SECONDS", "3.0"))
+
+FALLBACK_RATES: dict[str, float] = {
     "EUR": 1.0,
     "USD": 1.08,
     "GBP": 0.86,
@@ -81,7 +90,13 @@ BASE_RATES: dict[str, float] = {
     "JPY": 162.30,
 }
 
-SUPPORTED_CURRENCIES = set(BASE_RATES.keys())
+SUPPORTED_CURRENCIES = set(FALLBACK_RATES.keys())
+NON_EUR_SYMBOLS = ",".join(sorted(c for c in SUPPORTED_CURRENCIES if c != "EUR"))
+
+_rates_cache: dict[str, float] = {}
+_rates_cache_ts: float = 0.0
+_rates_cache_source: str = "uninitialized"  # "live" | "fallback" | "uninitialized"
+_rates_lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -104,27 +119,68 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _fluctuate(rate: float) -> float:
-    """Apply +/-0.5 % random fluctuation to a rate."""
-    return round(rate * (1 + random.uniform(-0.005, 0.005)), 4)
+def _load_rates() -> tuple[dict[str, float], str]:
+    """
+    Fetch EUR-based rates for the 6 non-EUR supported currencies from the
+    configured upstream provider.
+
+    On any failure (network, non-2xx, malformed body), log a warning and
+    return the hardcoded FALLBACK_RATES so the service stays available.
+    """
+    params = {"base": "EUR", "symbols": NON_EUR_SYMBOLS}
+    try:
+        with httpx.Client(timeout=RATES_API_TIMEOUT_SECONDS) as client:
+            resp = client.get(RATES_API_URL, params=params)
+            resp.raise_for_status()
+            body = resp.json()
+        upstream_rates = body.get("rates")
+        if not isinstance(upstream_rates, dict):
+            raise ValueError(f"upstream response missing 'rates' object: {body!r}")
+        rates: dict[str, float] = {"EUR": 1.0}
+        for currency in SUPPORTED_CURRENCIES:
+            if currency == "EUR":
+                continue
+            value = upstream_rates.get(currency)
+            if value is None:
+                raise ValueError(f"upstream response missing currency {currency}")
+            rates[currency] = float(value)
+        logger.info("Loaded rates source=live from %s", RATES_API_URL)
+        return rates, "live"
+    except Exception as exc:
+        logger.warning(
+            "Failed to fetch live rates from %s, using fallback: %s",
+            RATES_API_URL,
+            exc,
+        )
+        return dict(FALLBACK_RATES), "fallback"
+
+
+def _get_cached_rates() -> tuple[dict[str, float], str]:
+    """Return (rates, source). Refreshes the cache if the TTL has expired."""
+    global _rates_cache, _rates_cache_ts, _rates_cache_source
+    with _rates_lock:
+        now = time.monotonic()
+        if not _rates_cache or (now - _rates_cache_ts) > RATES_CACHE_TTL_SECONDS:
+            rates, source = _load_rates()
+            _rates_cache = rates
+            _rates_cache_ts = now
+            _rates_cache_source = source
+        return dict(_rates_cache), _rates_cache_source
 
 
 def _get_rate(from_curr: str, to_curr: str) -> float:
     """
     Return the exchange rate from *from_curr* to *to_curr*.
 
-    All base rates are expressed relative to EUR, so conversion between two
+    All rates are expressed relative to EUR, so conversion between two
     non-EUR currencies goes through EUR:
         from_curr -> EUR -> to_curr
     """
     if from_curr == to_curr:
         return 1.0
-
-    # from_curr -> EUR
-    from_eur = 1.0 / _fluctuate(BASE_RATES[from_curr])
-    # EUR -> to_curr
-    to_eur = _fluctuate(BASE_RATES[to_curr])
-
+    rates, _ = _get_cached_rates()
+    from_eur = 1.0 / rates[from_curr]
+    to_eur = rates[to_curr]
     return round(from_eur * to_eur, 4)
 
 
@@ -176,15 +232,14 @@ async def health():
 async def list_rates():
     """Return all rates with EUR as the base currency."""
     logger.info("Listing all exchange rates")
-    rates = {
-        currency: _fluctuate(rate)
-        for currency, rate in BASE_RATES.items()
-        if currency != "EUR"
-    }
+    rates, source = _get_cached_rates()
     return {
         "base": "EUR",
-        "rates": rates,
+        "rates": {
+            currency: rate for currency, rate in rates.items() if currency != "EUR"
+        },
         "timestamp": _now_iso(),
+        "source": source,
     }
 
 

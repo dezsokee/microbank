@@ -38,6 +38,12 @@ spec:
             - name: OTEL_SERVICE_NAME
               value: "exchange-service"
             {{- end }}
+            - name: RATES_API_URL
+              value: {{ .Values.rates.apiUrl | quote }}
+            - name: RATES_CACHE_TTL_SECONDS
+              value: {{ .Values.rates.cacheTtlSeconds | quote }}
+            - name: RATES_API_TIMEOUT_SECONDS
+              value: {{ .Values.rates.apiTimeoutSeconds | quote }}
           livenessProbe:
             httpGet:
               path: /healthz
