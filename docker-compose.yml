@@ -75,6 +75,9 @@ services:
       - "8085:8085"
     environment:
       PORT: "8085"
+      RATES_API_URL: "https://api.exchangerate.host/latest"
+      RATES_CACHE_TTL_SECONDS: "300"
+      RATES_API_TIMEOUT_SECONDS: "3.0"
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8085/healthz')\""]
       interval: 10s

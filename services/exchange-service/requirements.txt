@@ -6,4 +6,6 @@ opentelemetry-sdk==1.25.0
 opentelemetry-exporter-otlp==1.25.0
 opentelemetry-instrumentation-fastapi==0.46b0
 opentelemetry-instrumentation-logging==0.46b0
+opentelemetry-instrumentation-httpx==0.46b0
+httpx==0.27.0
 setuptools>=70.0.0,<81
