@@ -1,9 +1,3 @@
 # Claude Code
 .claude/
 CLAUDE.md
-
-# Linkerd install artifacts — rendered locally by `linkerd install`.
-# linkerd-control-plane.yaml contains the trust-anchor CA private key
-# and must never be committed.
-k8s/linkerd/linkerd-crds.yaml
-k8s/linkerd/linkerd-control-plane.yaml
