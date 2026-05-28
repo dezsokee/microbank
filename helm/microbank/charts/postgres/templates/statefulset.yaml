@@ -16,6 +16,12 @@ spec:
     metadata:
       labels:
         {{- include "postgres.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- if eq .Values.global.serviceMesh.provider "istio" }}
+        sidecar.istio.io/inject: "false"
+        {{- else if eq .Values.global.serviceMesh.provider "linkerd" }}
+        linkerd.io/inject: disabled
+        {{- end }}
     spec:
       containers:
         - name: postgres

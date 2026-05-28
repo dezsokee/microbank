@@ -16,8 +16,10 @@ spec:
         {{- include "frontend.selectorLabels" . | nindent 8 }}
       annotations:
         checksum/nginx-conf: {{ include (print $.Template.BasePath "/configmap-nginx.yaml") . | sha256sum }}
-        {{- if .Values.global.serviceMesh.enabled }}
+        {{- if eq .Values.global.serviceMesh.provider "istio" }}
         sidecar.istio.io/inject: "true"
+        {{- else if eq .Values.global.serviceMesh.provider "linkerd" }}
+        linkerd.io/inject: enabled
         {{- end }}
     spec:
       containers:

@@ -2,8 +2,8 @@
 
 A microservice-based fintech mock application simulating a simplified banking system. Built as the test workload for a master's dissertation researching **Software Supply Chain Security** and **Zero Trust (mTLS) architecture** in Kubernetes environments.
 
-**Current scope:** Local development and testing with Docker Compose.
-**Future scope:** Kubernetes deployment with service mesh (Istio/Linkerd/Cilium), SPIFFE/SPIRE workload identity, Sigstore image signing, and Prometheus/Grafana monitoring.
+**Current scope:** Local development with Docker Compose, plus Kubernetes deployment via Helm with switchable service-mesh providers (Istio or Linkerd) for mTLS benchmarking — see `helm/microbank/`, `k8s/istio/`, and `k8s/linkerd/`. Toggle via `--set global.serviceMesh.provider=istio|linkerd|none`.
+**Future scope:** SPIFFE/SPIRE workload identity, Sigstore image signing, and Cilium-based zero-trust networking.
 
 ---
 

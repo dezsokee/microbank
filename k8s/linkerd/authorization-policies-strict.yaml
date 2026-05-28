@@ -1,0 +1,55 @@
+# Linkerd equivalent of k8s/istio/peer-authentication-strict.yaml.
+#
+# Linkerd encrypts all meshed-to-meshed traffic AUTOMATICALLY — there is no
+# "STRICT mTLS" mode to turn on for encryption itself. What this file does is
+# enforce AUTHORIZATION: deny any traffic that arrives without an mTLS identity,
+# i.e. reject plaintext / non-meshed callers.
+#
+# Strategy:
+#   1. Set the namespace default-inbound-policy to "all-authenticated"
+#      → every meshed pod's proxy denies any inbound that isn't mTLS-authenticated.
+#      This is the Linkerd analogue of Istio's namespace-wide PeerAuthentication STRICT.
+#
+#   2. Carve out the ingress entry points (api-gateway:8080, frontend:80) with
+#      explicit Server resources that have accessPolicy: all-unauthenticated.
+#      This is the Linkerd analogue of Istio's portLevelMtls PERMISSIVE — the
+#      ingress controller (NGINX) is not meshed and would otherwise be blocked.
+#
+# OTel collector, Prometheus, Grafana, and Postgres opt OUT of injection in the
+# Helm chart, so they have no proxy and no authorization policy applies to them.
+# (Equivalent to Istio's otel-collector-plaintext PeerAuthentication being moot.)
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: student-research
+  annotations:
+    linkerd.io/inject: enabled
+    config.linkerd.io/skip-outbound-ports: "5432"
+    config.linkerd.io/default-inbound-policy: all-authenticated
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: api-gateway-ingress
+  namespace: student-research
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: api-gateway
+  port: 8080
+  proxyProtocol: HTTP/1
+  accessPolicy: all-unauthenticated
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: frontend-ingress
+  namespace: student-research
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+  port: 80
+  proxyProtocol: HTTP/1
+  accessPolicy: all-unauthenticated

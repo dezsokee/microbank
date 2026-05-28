@@ -18,8 +18,10 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8084"
         prometheus.io/path: "/metrics"
-        {{- if .Values.global.serviceMesh.enabled }}
+        {{- if eq .Values.global.serviceMesh.provider "istio" }}
         sidecar.istio.io/inject: "true"
+        {{- else if eq .Values.global.serviceMesh.provider "linkerd" }}
+        linkerd.io/inject: enabled
         {{- end }}
     spec:
       containers:
