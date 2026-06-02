@@ -16,6 +16,9 @@ honeycomb:
   endpoint: "https://api.honeycomb.io"
 
 serviceMesh:
-  enabled: false
+  # Which mesh is active in the cluster. Used to emit the correct
+  # sidecar-opt-out annotation on the OTel collector pod so it never
+  # gets a sidecar (avoids telemetry feedback loops). One of: istio | linkerd | none.
+  provider: istio
 
 environment: development

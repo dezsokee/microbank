@@ -9,7 +9,10 @@ global:
     username: microbank
     password: microbank
   serviceMesh:
-    enabled: true
+    # Which mesh to inject sidecars for. One of: istio | linkerd | none.
+    # Mesh-level CRDs (mTLS policies, telemetry) are applied separately
+    # from k8s/istio/ or k8s/linkerd/.
+    provider: istio
   prometheus:
     enabled: true
   otel:

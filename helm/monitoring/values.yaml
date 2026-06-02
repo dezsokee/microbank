@@ -1,6 +1,12 @@
 namespace: student-research
 microbankReleaseName: microbank
 
+serviceMesh:
+  # Active mesh in the cluster. Prometheus + Grafana opt out of injection
+  # under either mesh so the metrics path has no sidecar overhead.
+  # One of: istio | linkerd | none.
+  provider: istio
+
 prometheus:
   image: prom/prometheus:v2.51.0
   replicas: 1

@@ -1,0 +1,20 @@
+# Linkerd equivalent of k8s/istio/peer-authentication-disable.yaml.
+#
+# IMPORTANT: This does NOT disable mTLS encryption. Linkerd encrypts all
+# meshed-to-meshed traffic AUTOMATICALLY and there is no way to turn that off.
+# What this file does is disable authorization-level ENFORCEMENT — pods accept
+# both mTLS and non-mTLS callers (the latter must traverse the proxy, which
+# means non-meshed sources from inside the cluster network).
+#
+# Use this for development / debugging when you don't want a strict policy
+# rejecting unexpected callers. Apply this file INSTEAD OF
+# authorization-policies-strict.yaml.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: student-research
+  annotations:
+    linkerd.io/inject: enabled
+    config.linkerd.io/skip-outbound-ports: "5432"
+    config.linkerd.io/default-inbound-policy: all-unauthenticated

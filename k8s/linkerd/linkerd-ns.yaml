@@ -1,0 +1,21 @@
+# Namespace setup for Linkerd-meshed MicroBank.
+#
+# Linkerd uses ANNOTATIONS (not labels like Istio) to opt the namespace into
+# automatic sidecar injection. Pods in this namespace receive the linkerd-proxy
+# sidecar at creation time unless they have linkerd.io/inject: disabled.
+#
+# skip-outbound-ports: 5432 tells the linkerd-proxy NOT to intercept outbound
+# Postgres traffic. Postgres itself opts out of injection, so its connection
+# is plain TCP; without this annotation the proxy would still TCP-tunnel it
+# (no functional impact, but a small extra hop we don't want in the benchmark).
+#
+# Apply this file BEFORE applying authorization-policies-strict.yaml or
+# authorization-policies-disable.yaml. Then run a deployment rollout-restart
+# so the proxy-injector webhook injects sidecars into existing pods.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: student-research
+  annotations:
+    linkerd.io/inject: enabled
+    config.linkerd.io/skip-outbound-ports: "5432"

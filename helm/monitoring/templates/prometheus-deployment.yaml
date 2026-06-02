@@ -14,6 +14,12 @@ spec:
     metadata:
       labels:
         app: prometheus
+      annotations:
+        {{- if eq .Values.serviceMesh.provider "istio" }}
+        sidecar.istio.io/inject: "false"
+        {{- else if eq .Values.serviceMesh.provider "linkerd" }}
+        linkerd.io/inject: disabled
+        {{- end }}
     spec:
       containers:
         - name: prometheus
