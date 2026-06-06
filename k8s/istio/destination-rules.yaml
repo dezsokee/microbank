@@ -19,3 +19,19 @@ spec:
   trafficPolicy:
     tls:
       mode: DISABLE
+---
+# Postgres opts OUT of sidecar injection, so it cannot terminate Istio mTLS.
+# This specific-host rule overrides the wildcard ISTIO_MUTUAL above so meshed
+# clients connect to Postgres in plain TCP (matches Linkerd's
+# config.linkerd.io/skip-outbound-ports: "5432"). Without it, DB-backed
+# services (auth/account/transaction/audit) CrashLoop on startup.
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: postgres-plaintext
+  namespace: student-research
+spec:
+  host: microbank-postgres.student-research.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: DISABLE
