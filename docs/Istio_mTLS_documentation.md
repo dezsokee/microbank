@@ -1,350 +1,322 @@
-# Istio mTLS, SPIFFE & PKI
-## Comprehensive Technical Documentation
-*Service-to-Service Security in Kubernetes with Istio Service Mesh*
+# Istio mTLS, SPIFFE és PKI
+## Átfogó műszaki dokumentáció
+*Szolgáltatások közötti kommunikáció biztonsága Kubernetes környezetben Istio service mesh segítségével*
 
 ---
 
-## 1. Overview
+## 1. Áttekintés
 
-This document provides a comprehensive explanation of how service-to-service communication security works within an Istio service mesh. It focuses on three interconnected pillars:
+Ez a dokumentum átfogóan bemutatja, hogyan valósul meg a szolgáltatások közötti kommunikáció biztonsága egy Istio service mesh-ben. A leírás három egymásra épülő pillérre fókuszál:
 
-- **mTLS (mutual TLS)** — encrypted and mutually authenticated communication between services
-- **PKI (Public Key Infrastructure)** — the trust framework underpinning certificate-based identity
-- **Envoy Proxy configuration** — the data-plane component that enforces security policies
+- **mTLS (mutual TLS)** — titkosított és kölcsönösen hitelesített kommunikáció a szolgáltatások között
+- **PKI (nyilvános kulcsú infrastruktúra)** — a tanúsítványalapú identitást megalapozó bizalmi keretrendszer
+- **Envoy proxy konfiguráció** — az adatsíkon működő komponens, amely érvényesíti a biztonsági szabályzatokat
 
-Together, these components implement a Zero Trust networking model in Kubernetes, ensuring every connection is authenticated and encrypted regardless of network location.
-
----
-
-## 2. Core Concepts
-
-### 2.1 PKI — Public Key Infrastructure
-
-PKI is the system that enables mutual authentication and trust establishment between services using certificates. It is the foundation upon which Istio's security model is built.
-
-**Key components:**
-- **Key pair** — each workload generates a public/private key pair
-- **X.509 certificate** — binds a public key to an identity
-- **Certificate Authority (CA)** — the trusted entity that signs certificates
-- **Trust chain** — Root CA → Intermediate CA → Workload certificate
-
-> **Note:** PKI provides identity and trust. It does not directly perform data encryption — that is the role of TLS.
+Ezek a komponensek együttesen megvalósítják a Zero Trust hálózati modellt Kubernetes-ben, biztosítva, hogy minden kapcsolat hitelesített és titkosított legyen, függetlenül a hálózati helytől.
 
 ---
 
-### 2.2 SPIFFE — Secure Production Identity Framework For Everyone
+## 2. Alapfogalmak
 
-SPIFFE is an open standard that defines a workload identity format using URIs. In Istio, every workload receives a SPIFFE identity that is embedded in the certificate's Subject Alternative Name (SAN) field.
+### 2.1 PKI — Nyilvános Kulcsú Infrastruktúra
 
-**SPIFFE ID format:**
-```
-spiffe://cluster.local/ns/{namespace}/sa/{serviceaccount}
-```
+A PKI egy olyan rendszer, amely tanúsítványok segítségével teszi lehetővé a kölcsönös hitelesítést és a bizalom felépítését a szolgáltatások között. Ez az Istio biztonsági modelljének alapköve.
 
-This identity uniquely represents a workload by its Kubernetes namespace and service account, enabling cryptographically verifiable service-level authorization.
+A PKI legfontosabb elemei:
+- **Kulcspár** — minden munkaterhelés saját nyilvános és privát kulcsot generál
+- **X.509 tanúsítvány** — egy identitáshoz köti a nyilvános kulcsot
+- **Hitelesítő hatóság (CA)** — az a megbízható entitás, amely aláírja a tanúsítványokat
+- **Bizalmi lánc** — Gyökér CA → Közbenső CA → Munkaterhelés-tanúsítvány
 
----
+A PKI identitást és bizalmat biztosít, de maga nem végez adattitkosítást — ez a TLS feladata.
 
-### 2.3 mTLS — Mutual TLS
+### 2.2 SPIFFE — Biztonságos Termelési Identitás Keretrendszer
 
-Standard TLS only authenticates the server to the client. mTLS extends this by requiring both parties to present and validate certificates, establishing bidirectional trust.
+A SPIFFE egy nyílt szabvány, amely URI formátumban határozza meg a munkaterhelés-identitást. Az Istio-ban minden munkaterhelés kap egy SPIFFE identitást, amelyet a tanúsítvány Subject Alternative Name (SAN) mezőjébe ágyaznak be.
 
-**In an mTLS handshake:**
-- Both the client and server present an X.509 certificate
-- Both parties validate the peer's certificate against a trusted CA
-- A shared symmetric encryption key is negotiated
-- All subsequent communication is encrypted over the established channel
+A SPIFFE azonosító a Kubernetes névtér és szolgáltatásfiók alapján egyedileg azonosít egy munkaterhelést, lehetővé téve a kriptográfiailag ellenőrizhető szolgáltatásszintű engedélyezést.
 
----
+### 2.3 mTLS — Kölcsönös TLS
 
-## 3. Istio CA Infrastructure
-
-Istio uses a layered certificate hierarchy to balance security, operational flexibility, and blast-radius minimization:
-
-```
-Root CA                 (validity: ~10 years)
-  └─ Intermediate CA    (validity: ~1 year)
-       └─ Workload Cert (validity: ~24 hours)
-```
-
-**Why this hierarchy matters:**
-- The Root CA private key is kept offline and protected — it is never directly exposed to the network
-- The Intermediate CA handles day-to-day signing, limiting the impact of a compromise
-- Short-lived workload certificates (24h) drastically reduce the risk from key exposure — even if a certificate leaks, it expires quickly
-- Automatic rotation ensures continuity without manual intervention
+A hagyományos TLS csak a szervert hitelesíti a kliens felé. Az mTLS ezt kiterjeszti: mindkét fél bemutatja és validálja a másik tanúsítványát, kétirányú bizalmat létrehozva. Az mTLS kézfogás során mindkét fél X.509 tanúsítványt mutat be, validálja a másik tanúsítványát egy megbízható CA-val szemben, majd közösen egyeztet egy szimmetrikus titkosítókulcsot — ezután a teljes kommunikáció titkosított csatornán folyik.
 
 ---
 
-## 4. Certificate Lifecycle
+## 3. Az Istio CA hierarchia
 
-### 4.1 Certificate Issuance on Pod Startup
+Az Istio rétegelt tanúsítványhierarchiát alkalmaz a biztonság és az üzemeltetési rugalmasság egyensúlyban tartásához:
 
-When a Pod starts, the following sequence occurs automatically:
+- **Gyökér CA** — körülbelül tíz éves érvényességi idővel, soha nem kerül közvetlenül a hálózatra
+- **Közbenső CA** — körülbelül egy éves érvényességgel, ez végzi a napi aláírásokat
+- **Munkaterhelés-tanúsítvány** — mindössze 24 óráig érvényes, automatikusan megújítva
 
-| Step | Actor | Action |
-|------|-------|--------|
-| 1 | Kubernetes | Schedules Pod; Envoy sidecar injected by Istio mutating webhook |
-| 2 | Envoy Sidecar | Generates a private key locally inside the Pod |
-| 3 | Envoy Sidecar | Creates a Certificate Signing Request (CSR) with the SPIFFE ID |
-| 4 | istiod (Citadel) | Validates the CSR and signs it using the Intermediate CA |
-| 5 | Envoy Sidecar | Receives the signed certificate; begins accepting/initiating mTLS connections |
-
-> **Note:** The private key is generated inside the Pod and never transmitted over the network. istiod only receives the CSR, not the private key.
-
-### 4.2 Certificate Rotation
-
-- Workload certificates are valid for approximately 24 hours
-- Envoy proactively renews certificates before expiry — no service restart is required
-- Rotation is fully automatic and transparent to the application
+A rövid érvényességi idő kulcsfontosságú: ha egy munkaterhelés-tanúsítvány kompromittálódik, az legfeljebb 24 óra múlva érvényét veszti. A gyökér CA privát kulcsa offline marad, a közbenső CA kompromittálódása nem veszélyezteti a teljes hierarchiát.
 
 ---
 
-## 5. mTLS Handshake Process
+## 4. Telepítés Kubernetes-ben
 
-### 5.1 When Does It Occur?
+### 4.1 A vezérlősík és a névterek előkészítése
 
-The TLS handshake happens once per TCP connection, not per HTTP request. Istio's Envoy proxies maintain connection pools, so a single handshake can cover many subsequent requests on that connection.
+Az Istio telepítése két névtér létrehozásával és konfigurálásával kezdődik. Az **istio-system** névtérbe kerül maga az Istio vezérlősíkja — elsősorban az **istiod** nevű komponens. A munkaterheléseket futtató névtérre (jelen projektben: **student-research**) egy speciális `istio-injection: enabled` jelölőt (label) kell elhelyezni.
 
-### 5.2 Handshake Step-by-Step
+Ez a label közli a Kubernetes admission webhook mechanizmusával, hogy ebbe a névtérbe kerülő minden podba automatikusan be kell injektálni az Istio adatoldali proxyját. Ez az injekciós mechanizmus az egész biztonsági modell alapja — maga az alkalmazáskód nem tud arról, hogy egy proxy veszi körbe.
 
-| Step | Direction | Description |
-|------|-----------|-------------|
-| 1 | — | TCP connection established between client Envoy and server Envoy |
-| 2 | Client → Server | ClientHello: proposes TLS version and cipher suites |
-| 3 | Server → Client | ServerHello + server certificate (containing SPIFFE ID) |
-| 4 | Client | Validates server certificate against trusted CA bundle |
-| 5 | Client → Server | Client certificate (containing client's SPIFFE ID) |
-| 6 | Server | Validates client certificate against trusted CA bundle |
-| 7 | Both | ECDHE key exchange to derive shared symmetric session key |
-| 8 | Both | Encrypted communication begins |
+### 4.2 istiod — az Istio vezérlősík
 
-### 5.3 Cryptographic Primitives
+Az **istiod** egy egységes vezérlősík-bináris, amely három korábban különálló Istio komponens feladatait látja el:
 
-| Primitive | Role | Example Algorithm |
-|-----------|------|-------------------|
-| PKI / X.509 | Identity verification | RSA-2048 / ECDSA P-256 |
-| Key Exchange | Session key negotiation | ECDHE (Diffie-Hellman) |
-| Symmetric Encryption | Data confidentiality | AES-128-GCM / AES-256-GCM |
-| MAC / Integrity | Data authenticity | SHA-256 / SHA-384 |
+- **Pilot**: figyeli a Kubernetes API-t (Services, Endpoints), és proxy-konfigurációkat generál minden sidecar számára
+- **Citadel**: a hitelesítő hatóság (CA) szerepét tölti be — kiadja és megújítja a munkaterhelés-tanúsítványokat
+- **Galley**: konfiguráció-validáció és -elosztás
 
----
+Az istiod az **xDS protokoll** segítségével dinamikusan terjeszti a konfigurációt az Envoy proxy-khoz újraindítás nélkül. A **Secret Discovery Service (SDS)** API-n keresztül a proxy-k lekérik a TLS tanúsítványaikat és kulcsaikat is.
 
-## 6. Connection Reuse & Performance
+### 4.3 Kubernetes és Istio komponensek — áttekintő diagram
 
-A common concern with mTLS is performance overhead from repeated handshakes. Istio addresses this efficiently:
+Az alábbi komponens diagram az Istio és a Kubernetes érintett rétegeit, azok kapcsolatait és a MicroBank projektben nem meshed podok kivételkezelését mutatja be.
 
-- The TLS handshake occurs only once per TCP connection — not per HTTP request
-- Envoy maintains a connection pool for each upstream cluster, reusing established TLS sessions
-- HTTP/2 multiplexing allows many concurrent requests to share a single connection, further amortizing handshake cost
-- The operational overhead of mTLS in Istio is minimal for most workloads
+```mermaid
+flowchart TB
+    subgraph K8S["Kubernetes vezérlősík"]
+        APISERVER["kube-apiserver\n─────────────────\nPod lifecycle kezelés\nAdmission webhook hívások"]
+        WEBHOOK["MutatingAdmissionWebhook\n─────────────────\nPod spec módosítása\nSidecar injection logika"]
+        APISERVER --> WEBHOOK
+    end
 
----
+    subgraph ISTIO_CP["Istio vezérlősík — istio-system névtér"]
+        ISTIOD["istiod\n─────────────────\nPilot · service discovery, xDS konfig push\nCitadel · CA, tanúsítványkiadás (SDS API)\nGalley · konfiguráció validáció"]
+    end
 
-## 7. Istio Control Plane — istiod
+    subgraph STUDENT["student-research névtér  (istio-injection: enabled)"]
+        subgraph POD["Meshed Pod  (pl. transaction-service)"]
+            INIT["istio-init\niptables intercept\n(15001 / 15006 portok)"]
+            PROXY["istio-proxy / Envoy\nkimenő és bejövő listener\nX.509 tanúsítvány tárolás"]
+            APP["Alkalmazás konténer\n(pl. Spring Boot :8083)"]
+            INIT --> PROXY
+            PROXY <-->|"HTTP (localhost)"| APP
+        end
+        PA["PeerAuthentication\nbejövő mTLS kényszer"]
+        DR["DestinationRule\nkimenő TLS mód"]
+        TEL["Telemetry\ntracing konfiguráció"]
+    end
 
-istiod is the single control-plane binary that consolidates three previously separate Istio components: Pilot, Citadel, and Galley.
+    subgraph EXCL["Sidecar nélküli podok"]
+        PG["PostgreSQL\nDestinationRule: DISABLE"]
+        OTEL["OTel Collector\nDestinationRule: DISABLE"]
+    end
 
-**Responsibilities:**
-- Watches Kubernetes API for Services, Endpoints, and configuration objects
-- Acts as the Certificate Authority (CA) — issues and renews workload certificates via the SDS (Secret Discovery Service) API
-- Generates Envoy configurations (listeners, routes, clusters) for every sidecar
-- Pushes configuration to Envoy proxies via the xDS protocol
-
----
-
-## 8. Envoy Proxy — Data Plane
-
-### 8.1 Core Abstractions
-
-| Concept | Description |
-|---------|-------------|
-| Listener | Network endpoint that accepts incoming connections (IP:port) |
-| Filter Chain | Ordered set of filters applied to traffic on a listener |
-| Cluster | Group of upstream endpoints (a logical backend service) |
-| Endpoint | A specific host:port within a cluster |
-| Route | Rules that map requests to clusters based on headers, path, etc. |
-
-### 8.2 xDS Discovery APIs
-
-istiod uses the xDS protocol family to dynamically push configuration to Envoy without restart:
-
-| API | Full Name | Manages |
-|-----|-----------|---------|
-| LDS | Listener Discovery Service | Listeners and filter chains |
-| CDS | Cluster Discovery Service | Upstream clusters |
-| EDS | Endpoint Discovery Service | Cluster member endpoints |
-| RDS | Route Discovery Service | HTTP routing rules |
-| SDS | Secret Discovery Service | TLS certificates and keys |
-
----
-
-## 9. Inbound vs. Outbound Listeners
-
-### 9.1 Outbound Listener
-
-Handles traffic leaving the application container toward other services.
-
-- Intercepts all outgoing TCP connections from the application
-- Applies routing rules (DestinationRule, VirtualService)
-- Initiates mTLS if the target service has a valid certificate
-- Adds telemetry (metrics, traces, access logs)
-
-### 9.2 Inbound Listener
-
-Handles traffic arriving at the application container from other services.
-
-- Intercepts all incoming connections before the application receives them
-- Validates the client's mTLS certificate
-- Enforces PeerAuthentication and AuthorizationPolicy rules
-- Forwards validated traffic to the local application port
-
----
-
-## 10. PeerAuthentication
-
-PeerAuthentication is an Istio CRD that controls the mTLS policy for inbound traffic to a workload or namespace.
-
-| Mode | Behavior | Use Case |
-|------|----------|----------|
-| `PERMISSIVE` | Accepts both mTLS and plain-text traffic | Migration phase; onboarding legacy services |
-| `STRICT` | Accepts only mTLS traffic; rejects plain-text | Production Zero Trust enforcement |
-| `DISABLE` | Disables mTLS entirely; accepts only plain-text | Debugging; external load balancer integration |
-
-> **Note:** PeerAuthentication does not create new Envoy listeners. It modifies the filter chain configuration of the existing inbound listener.
-
-**Example — namespace-wide STRICT mode:**
-```yaml
-apiVersion: security.istio.io/v1beta1
-kind: PeerAuthentication
-metadata:
-  name: default
-  namespace: production
-spec:
-  mtls:
-    mode: STRICT
+    WEBHOOK -->|"istio-init + istio-proxy hozzáadása"| POD
+    APISERVER <-->|"pod lifecycle értesítések"| ISTIOD
+    ISTIOD -->|"xDS API — listeners, routes, clusters"| PROXY
+    ISTIOD -->|"SDS API — X.509 tanúsítvány és kulcs"| PROXY
+    PA & DR & TEL -->|"policy értelmezés"| ISTIOD
+    PROXY -.->|"mTLS bypass — TLS mode: DISABLE"| EXCL
 ```
 
 ---
 
-## 11. DestinationRule
+## 5. Konténer deployment és sidecar injection
 
-DestinationRule configures the outbound TLS behavior when a service calls another service. It is the client-side counterpart to PeerAuthentication.
+### 5.1 Az injekciós folyamat
 
-| TLS Mode | Description |
-|----------|-------------|
-| `ISTIO_MUTUAL` | Istio automatically provides certificates; full mTLS (most common) |
-| `MUTUAL` | User-supplied client certificates for mTLS (BYO-cert scenarios) |
-| `SIMPLE` | One-way TLS; server authenticates only |
-| `DISABLE` | Plain-text; no TLS |
+Amikor egy pod indul a jelölt névtérben, a következő lépések zajlanak le automatikusan, még mielőtt az alkalmazáskonténer egyáltalán elindulna:
 
-**Example — ISTIO_MUTUAL for a service:**
-```yaml
-apiVersion: networking.istio.io/v1beta1
-kind: DestinationRule
-metadata:
-  name: payment-service
-spec:
-  host: payment-service.production.svc.cluster.local
-  trafficPolicy:
-    tls:
-      mode: ISTIO_MUTUAL
+1. A Kubernetes API szerver fogadja a pod-létrehozási kérést, és átadja az Istio **MutatingAdmissionWebhook**-jának.
+2. Az Istio webhook módosítja a pod specifikációját: hozzáad egy **istio-init** init-konténert és egy **istio-proxy** (Envoy) sidecar konténert.
+3. Az init-konténer lefut az alkalmazás előtt, és **iptables szabályokat** konfigurál a pod hálózati névterében — ezek a szabályok az összes bejövő és kimenő TCP forgalmat az Envoy proxy portjaira irányítják át.
+4. Ezután indul el az alkalmazáskonténer, amelyet már körülvesz az Envoy sidecar.
+
+Az eredmény: az alkalmazás azt hiszi, hogy direktben kommunikál a többi szolgáltatással, miközben valójában minden forgalom az Envoy proxyn keresztül halad — az alkalmazás erről semmit nem tud, és semmilyen módosítást nem igényel.
+
+### 5.2 Tanúsítványok kiadása pod indításkor
+
+Miután az Envoy sidecar elindult, elvégzi az identitásregisztrációt:
+
+1. Az Envoy a pod belsejében generál egy privát kulcsot — ez a kulcs soha nem hagyja el a podot.
+2. Létrehoz egy **Certificate Signing Request (CSR)** kérelmet, amely tartalmazza a munkaterhelés SPIFFE identitását (névtér + szolgáltatásfiók).
+3. A CSR-t elküldi az istiod-nak az SDS API-n keresztül.
+4. Az istiod validálja a kérést, majd a Közbenső CA-val aláírja az új tanúsítványt.
+5. Az Envoy megkapja az aláírt tanúsítványt, és megkezdheti az mTLS kapcsolatok létrehozását és fogadását.
+
+### 5.3 Tanúsítványok megújítása
+
+A munkaterhelés-tanúsítványok 24 óráig érvényesek. Az Envoy proaktívan megújítja a tanúsítványt a lejárat előtt — a folyamat teljesen transzparens, nem igényel alkalmazás-újraindítást, és a meglévő kapcsolatokat sem szakítja meg.
+
+---
+
+## 6. mTLS kézfogás folyamata
+
+### 6.1 Mikor zajlik le?
+
+A TLS kézfogás TCP-kapcsolatonként egyszer zajlik le, nem minden HTTP kérésre külön. Az Envoy kapcsolatkészleteket (connection pool) tart fenn az egyes cél-szolgáltatásokhoz, így egyetlen kézfogás akár több ezer kérést is lefedhet. A HTTP/2 multiplexálás tovább csökkenti az overheadet: ugyanazon a kapcsolaton párhuzamos kérések is futhatnak.
+
+### 6.2 A kézfogás lépései
+
+Amikor az A szolgáltatás kapcsolódni kíván a B szolgáltatáshoz:
+
+1. Az A pod alkalmazása HTTP kérést küld a B szolgáltatás lokális portjára. Az iptables szabályok az Envoy kimeneti listenerére irányítják a forgalmat.
+2. Az A pod Envoy proxy-ja kikeresi a célhoz tartozó routing és TLS szabályokat.
+3. TCP kapcsolat épül ki az A és B pod Envoy proxy-ja között.
+4. Az A Envoy elküldi a ClientHello üzenetet — javasolt TLS verzió és titkosítóalgoritmusok.
+5. A B Envoy válaszol a saját tanúsítványával, amelynek SAN mezőjébe a SPIFFE identitása van beágyazva.
+6. Az A Envoy validálja a kapott tanúsítványt az istiod-tól kapott CA-bundle segítségével.
+7. Az A Envoy elküldi a saját tanúsítványát.
+8. A B Envoy ugyanúgy validálja az A tanúsítványát.
+9. Mindkét fél ECDHE kulcscsere útján egyeztet egy szimmetrikus munkamenetkulcsot.
+10. Az ettől kezdődő kommunikáció titkosított csatornán folyik.
+
+### 6.3 Kriptográfiai algoritmusok
+
+Az Istio TLS 1.3-at használ, amely a TLS protokoll jelenlegi legbiztonságosabb verziója. A TLS 1.3 leegyszerűsítette a kézfogási folyamatot és eltávolította a régebbi, gyengébb algoritmusokat, amelyek korábbi verziókban még jelen voltak.
+
+**Munkaterhelés-tanúsítványok — RSA-2048 és ECDSA P-256**
+
+A tanúsítványokban szereplő aszimmetrikus kulcspárok két algoritmuscsaládból kerülnek ki. Az **RSA-2048** egy hagyományos, széleskörűen támogatott algoritmus, amelynek biztonsága nagyszámok faktorizálásának nehézségén alapul — a 2048-as szám a kulcs bitméretét jelenti, ami ma még kellő védelmet nyújt. Az **ECDSA P-256** (Elliptic Curve Digital Signature Algorithm) ezzel szemben elliptikus görbékre épülő matematikát használ. A P-256 jelölés az adott görbét azonosítja. Az ECDSA lényegesen rövidebb kulcsokkal nyújt ugyanolyan biztonsági szintet, mint az RSA — a P-256-os kulcs hozzávetőlegesen egy 3072 bites RSA kulccsal egyenértékű, miközben töredéke a mérete. Ezért az ECDSA-alapú tanúsítványok generálása, aláírása és ellenőrzése is gyorsabb.
+
+**Kulcscsere — ECDHE (Elliptic Curve Diffie-Hellman Ephemeral)**
+
+A kézfogás során a két fél nem közvetlenül adja át egymásnak a titkosítókulcsot — azt soha nem küldik el a hálózaton. Ehelyett az **ECDHE** protokoll segítségével mindkét fél nyilvánosan látható értékeket cserél, amelyekből mindkettő — és csakis ők — ugyanazt a titkos munkamenetkulcsot tudja levezetni. A folyamat az elliptikus görbe matematikájára támaszkodik. Az "Ephemeral" (rövid élettartamú) jelző azt jelenti, hogy minden egyes kapcsolathoz új, egyszer használatos kulcspárt generálnak — ez biztosítja az ún. **forward secrecy** tulajdonságot: ha egy korábbi privát kulcs utólag kompromittálódna, a múltbeli titkosított forgalom akkor sem fejthető vissza, mert az ahhoz használt egyszer érvényes munkamenetkulcs már megsemmisült.
+
+**Szimmetrikus titkosítás — AES-GCM**
+
+Miután a munkamenetkulcs megvan, az adatok tényleges titkosítása szimmetrikus algoritmussal történik — ez lényegesen gyorsabb, mint az aszimmetrikus kriptográfia. Az **AES** (Advanced Encryption Standard) a ma legelterjedtebb szimmetrikus titkosítóalgoritmus, amelyet az USA szövetségi szabványügyi hivatala (NIST) írt elő. A **GCM** (Galois/Counter Mode) az AES egy üzemmódja, amely nemcsak titkosítást, hanem egyidejűleg integritásvédelmet (hitelesítő kódot, MAC) is biztosít. Ez az AEAD (Authenticated Encryption with Associated Data) tulajdonság azt jelenti, hogy ha valaki megpróbálja manipulálni az átvitel közbeni titkosított adatot, a fogadó fél ezt azonnal észleli, és elveti a csomagot. Az AES-128-GCM 128 bites, az AES-256-GCM 256 bites kulcsot alkalmaz — mindkettő kellően erős, az utóbbi extra védettséget nyújt kifejezetten magas biztonsági követelmények esetén.
+
+### 6.4 Deployment és kommunikáció — szekvenciadiagram
+
+Az alábbi diagram két egymást követő fázist mutat be: először a pod deploymentkor zajló sidecar injekciót és tanúsítványkérést, majd a futó szolgáltatások közötti tényleges mTLS kommunikációt.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant K as kubectl
+    participant API as Kubernetes API Server
+    participant WH as Istio MutatingWebhook
+    participant II as istio-init
+    participant EA as istio-proxy A (Envoy)
+    participant ISO as istiod (Citadel)
+    participant AA as App A
+    participant EB as istio-proxy B (Envoy)
+    participant AB as App B
+
+    rect rgb(220, 235, 255)
+        Note over K,AA: 1. fázis — Pod deployment és sidecar injection
+
+        K->>API: Pod létrehozási kérés
+        API->>WH: AdmissionReview (pod spec)
+        WH->>WH: Pod spec módosítása
+        Note right of WH: istio-init + istio-proxy<br/>konténerek hozzáadva
+        WH-->>API: Módosított pod spec visszaküldése
+        API->>II: istio-init elindítása (elsőként fut)
+        II->>II: iptables szabályok konfigurálása
+        Note right of II: Minden TCP forgalom az<br/>Envoy portjaira terelve (15001/15006)
+        II-->>API: Init konténer befejezve
+        API->>EA: istio-proxy elindítása
+        EA->>EA: Privát kulcs generálása (ECDSA P-256)
+        EA->>ISO: CSR küldése (SPIFFE identitással)
+        ISO->>ISO: CSR validálása, Közbenső CA aláírása
+        ISO-->>EA: Aláírt X.509 tanúsítvány (24h érvényes)
+        API->>AA: Alkalmazás konténer elindítása
+        Note over EA,AA: Envoy kész — mTLS fogadható és kezdeményezhető
+    end
+
+    rect rgb(220, 255, 230)
+        Note over AA,AB: 2. fázis — Szolgáltatások közötti mTLS kommunikáció
+
+        AA->>EA: HTTP kérés (localhost:port)
+        Note right of AA: iptables intercept → Envoy
+        EA->>EA: DestinationRule ellenőrzése → ISTIO_MUTUAL
+        EA->>EB: TCP kapcsolat + ClientHello (TLS 1.3)
+        EB-->>EA: ServerHello + B tanúsítvány (SPIFFE SAN)
+        EA->>EA: B tanúsítvány validálása (CA bundle)
+        EA-->>EB: A tanúsítvány elküldése
+        EB->>EB: A tanúsítvány validálása (CA bundle)
+        Note over EA,EB: Kölcsönös hitelesítés sikeres
+        EA->>EB: ECDHE kulcscsere (X25519 görbe)
+        EB-->>EA: ECDHE válasz
+        Note over EA,EB: Munkamenetkulcs levezetése<br/>AES-128-GCM titkosítás aktiválva
+        EA->>EB: Titkosított HTTP kérés
+        EB->>EB: PeerAuthentication ellenőrzése (STRICT)
+        EB->>AB: HTTP kérés visszafejtve (localhost)
+        AB-->>EB: HTTP válasz
+        EB-->>EA: Titkosított válasz
+        EA-->>AA: HTTP válasz visszafejtve
+    end
 ```
 
 ---
 
-## 12. Full Request Flow
+## 7. Forgalomirányítási szabályzatok
 
-The following illustrates a complete service-to-service request in an Istio mesh with STRICT mTLS:
+### 7.1 PeerAuthentication — bejövő forgalom
 
-```
-┌──────────────────────────────────────────────────────────┐
-│  Service A Pod                    Service B Pod           │
-│                                                           │
-│  [App A]                              [App B]             │
-│     │ HTTP (localhost)                    ▲               │
-│     ▼                                    │ HTTP           │
-│  [Envoy A]  ──── mTLS (TCP) ────>  [Envoy B]            │
-│  Outbound Listener                Inbound Listener        │
-│  - Route lookup                   - Cert validation       │
-│  - TLS handshake                  - Policy enforcement    │
-│  - Encrypt traffic                - Decrypt traffic       │
-└──────────────────────────────────────────────────────────┘
-```
+A **PeerAuthentication** egy Istio-specifikus erőforrásfajta (CRD), amely a bejövő forgalomra vonatkozó mTLS szabályzatot határozza meg.
 
-**Step-by-step:**
-1. App A sends an HTTP request to localhost (Envoy intercepts via iptables)
-2. Envoy A's outbound listener matches the destination and applies routing rules
-3. Envoy A performs a TLS handshake with Envoy B, presenting its SPIFFE certificate
-4. Envoy B validates Envoy A's certificate, then presents its own certificate
-5. Envoy A validates Envoy B's certificate — mutual authentication complete
-6. The request is sent encrypted over the established mTLS connection
-7. Envoy B decrypts the request, enforces inbound policies, and forwards to App B
+Három üzemmód létezik:
+
+- **STRICT** — kizárólag mTLS forgalmat fogad el; minden titkosítatlan kapcsolatot visszautasít. Ez a Zero Trust éles üzemi állapota.
+- **PERMISSIVE** — elfogad mTLS és titkosítatlan forgalmat egyaránt. Átmeneti állapothoz, legacy szolgáltatások bevonásához hasznos.
+- **DISABLE** — teljesen letiltja az mTLS-t, csak titkosítatlan kapcsolatokat fogad el. Hibakereséshez vagy nem meshed hívók integrációjához szükséges.
+
+A jelen projektben a névtér egésze STRICT módban fut, de az egyes belépési pontokon (api-gateway, frontend) portszinten PERMISSIVE kivétel érvéyes — azért, mert a külső NGINX ingress controller nem meshed, és nem tud mTLS-t küldeni.
+
+### 7.2 DestinationRule — kimenő forgalom
+
+Míg a PeerAuthentication a szerver oldalát (bejövő) szabályozza, a **DestinationRule** a kliensoldalt (kimenő forgalom) konfigurálja. Megadja, hogy egy adott célhoz küldött forgalmat milyen TLS üzemmódban kell kezelni.
+
+A leggyakoribb üzemmód az **ISTIO_MUTUAL**, amelynél az Istio automatikusan biztosítja a tanúsítványokat a kliens Envoy proxy számára — az alkalmazásnak semmiféle TLS konfigurációt nem kell végzenie.
+
+A projektben egy névtérszintű alap DestinationRule van érvényben, amely az összes belső szolgáltatásra ISTIO_MUTUAL módot ír elő. Ezen felül két kivétel szerepel:
+- A **Postgres adatbázis** kap egy DISABLE szabályt, mivel nem rendelkezik sidecar-ral és nem tud mTLS-t fogadni. Ennek hiányában az adatbázist használó szolgáltatások indításkor CrashLoop állapotba esnek.
+- Az **OTel collector** szintén DISABLE kivételt kap ugyanezen okból.
 
 ---
 
-## 13. Security Benefits
+## 8. Telemetria
 
-| Property | How Istio Achieves It |
-|----------|-----------------------|
-| Zero Trust Networking | Every connection requires mutual certificate authentication; no implicit trust based on IP |
-| Automatic Identity Management | Certificates issued and rotated automatically via istiod — no manual PKI ops |
-| Short-Lived Credentials | 24-hour workload certificates limit exposure window from key compromise |
-| Encryption in Transit | All mesh traffic encrypted by default with AES-GCM |
-| Workload Isolation | SPIFFE IDs enable fine-grained AuthorizationPolicy per service account |
-| Audit & Observability | mTLS identity available in access logs, metrics, and distributed traces |
+Az Istio **Telemetry** erőforrásán keresztül konfigurálja a nyomkövetést (tracing). A projektben minden kérés 100%-ban nyomkövetett, és az adatok az OTel collectorra kerülnek. Az Istio az Envoy proxy szintjén automatikusan propagálja a trace kontextust a szolgáltatások között (W3C Trace Context fejlécek), így az elosztott nyomkövetés az alkalmazáskód módosítása nélkül is működik.
 
 ---
 
-## 14. Common Pitfalls & Troubleshooting
+## 9. A teljes kommunikációs folyamat
 
-| Issue | Cause | Resolution |
-|-------|-------|------------|
-| Connection refused with STRICT mode | PeerAuthentication set to STRICT but calling service has no sidecar or DestinationRule missing | Ensure all callers have Envoy injected; add DestinationRule with ISTIO_MUTUAL |
-| Certificate mismatch | Clock skew between nodes causes certificate validity window mismatch | Synchronize NTP across all cluster nodes |
-| 503 upstream connect error | Sidecar not injected on target Pod; plain-text hits STRICT listener | Check injection label on namespace/pod; verify istio-proxy container is present |
-| Handshake timeout | Network policy blocking Envoy-to-Envoy port (15006/15001) | Allow Envoy traffic ports in NetworkPolicy rules |
-| SAN mismatch | DestinationRule host does not match the certificate's SPIFFE SAN | Use the full Kubernetes DNS name as the DestinationRule host |
+Az alábbiakban nyomon követhető egy pénzátutalási kérés útja a MicroBank rendszerben, Istio mTLS mellett:
 
----
+**1. Külső kérés belépése:**
+Az NGINX ingress controller HTTPS kérést küld az api-gateway-nek a 8080-as porton. Ez a port PERMISSIVE módban van konfigurálva, így a nem meshed NGINX is tud kapcsolódni — az Istio proxy fogadja a plaintext forgalmat.
 
-## 15. Mental Model
+**2. Belső hívás: api-gateway → transaction-service:**
+Az api-gateway alkalmazása HTTP kérést küld a transaction-service-nek. Az iptables szabályok az Envoy kimeneti listenerére irányítják ezt a forgalmat. Az Envoy ellenőrzi a DestinationRule-t (ISTIO_MUTUAL), elvégzi az mTLS kézfogást a transaction-service Envoy proxy-jával, majd titkosított csatornán küldi a kérést.
 
-```
-┌─────────────────────────────────────────┐
-│            istiod (Control Plane)        │
-│  • Kubernetes state watcher              │
-│  • Certificate Authority (CA)            │
-│  • xDS config generator & pusher         │
-└───────────────┬─────────────────────────┘
-                │  certificates + xDS config
-                ▼
-┌─────────────────────────────────────────┐
-│         Envoy Sidecar (Data Plane)       │
-│  • Listener/Cluster/Route enforcement    │
-│  • mTLS handshake & policy check         │
-│  • Telemetry collection                  │
-└───────────────┬─────────────────────────┘
-                │  encrypted mTLS traffic
-                ▼
-┌─────────────────────────────────────────┐
-│           Network (Data Path)            │
-│  • TLS 1.3 encrypted TCP streams         │
-│  • SPIFFE identity in every connection   │
-└─────────────────────────────────────────┘
-```
+**3. A transaction-service-től induló lánc:**
+A transaction-service a kérés feldolgozása során maga is hív más szolgáltatásokat: account-service-t (egyenleg ellenőrzés, terhelés/jóváírás), fraud-service-t (tranzakciós ellenőrzés), exchange-service-t (devizaárfolyam), notification-service-t (értesítés) és audit-service-t (naplózás). Minden egyes ilyen hívás ugyanazon az mTLS-csatornán halad — automatikusan, az alkalmazáskód tudta nélkül.
+
+**4. Adatbázis-kapcsolat:**
+Az account-service a Postgres felé is kapcsolódik. Ez nem megy az mTLS csatornán — a DestinationRule DISABLE kivétele értelmében a Postgres-hez irányuló forgalom titkosítatlan TCP marad. A Postgres nem rendelkezik Envoy sidecar-ral, ezért nem tudna mTLS-t fogadni.
 
 ---
 
-## 16. Summary
+## 10. Biztonsági előnyök
 
-Istio's security architecture is built on the composition of four complementary systems:
+Az Istio service mesh az alábbi Zero Trust biztonsági tulajdonságokat valósítja meg:
 
-| System | Role |
-|--------|------|
-| PKI | Provides identity and trust — *who are you?* |
-| SPIFFE / X.509 | Encodes workload identity into verifiable certificates |
-| TLS / mTLS | Provides encryption and mutual authentication — *prove it* |
-| Envoy Proxy | Enforces policies transparently — without changing application code |
-| istiod | Orchestrates the entire system — configuration, certificates, and observability |
+- **Hálózati Zero Trust**: minden kapcsolathoz kölcsönös tanúsítvány-hitelesítés szükséges; az IP-cím alapú bizalom nem értelmezhető.
+- **Automatikus identitáskezelés**: tanúsítványok kiadása és megújítása automatikusan, istiod által — manuális PKI műveletek nélkül.
+- **Rövid élettartamú hitelesítők**: a 24 órás munkaterhelés-tanúsítványok drámaian csökkentik a kulcskompromittálódás kockázatát.
+- **Adattitkosítás átvitel közben**: minden mesh-forgalom alapértelmezetten titkosított AES-GCM algoritmussal.
+- **Munkaterhelés-izoláció**: a SPIFFE azonosítók lehetővé teszik a részletes, szolgáltatásfiók-szintű engedélyezési szabályok (AuthorizationPolicy) alkalmazását.
+- **Auditálhatóság és megfigyelhetőség**: az mTLS identitás elérhető a hozzáférési naplókban, metrikákban és elosztott nyomkövetési adatokban.
 
-Together, they implement a production-grade Zero Trust security posture for microservices on Kubernetes — where every connection is authenticated, every byte is encrypted, and access is controlled at the workload identity level.
+---
+
+## 11. Az Istio mentális modellje
+
+Az Istio biztonsági architektúrája négy egymást kiegészítő rendszer összehangolt működésén alapul:
+
+- **PKI**: identitást és bizalmat biztosít — *ki vagy?*
+- **SPIFFE / X.509**: a munkaterhelés-identitást ellenőrizhető tanúsítványba kódolja
+- **TLS / mTLS**: titkosítást és kölcsönös hitelesítést biztosít — *bizonyítsd be*
+- **Envoy proxy**: transzparensen érvényesíti a szabályzatokat — az alkalmazáskód módosítása nélkül
+- **istiod**: hangolja össze az egész rendszert — konfiguráció, tanúsítványok és megfigyelhetőség
+
+Együttesen egy termelési szintű Zero Trust biztonsági állást valósítanak meg Kubernetes-ben: minden kapcsolat hitelesített, minden bájt titkosított, és a hozzáférés munkaterhelés-identitás szintjén ellenőrzött.
