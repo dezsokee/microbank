@@ -6,6 +6,11 @@ on:
     paths: [services/api-gateway/**, .github/workflows/reusable-go.yml, .github/workflows/ci-api-gateway.yml]
   pull_request:
     paths: [services/api-gateway/**, .github/workflows/reusable-go.yml, .github/workflows/ci-api-gateway.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read

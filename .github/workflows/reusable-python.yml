@@ -101,14 +101,16 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ${{ inputs.service_path }}
-          push: true
+          push: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
           tags: ${{ steps.tags.outputs.tags }}
 
       - name: Sign image with Cosign (keyless)
+        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
         continue-on-error: false
         run: cosign sign --yes "${{ steps.tags.outputs.image }}@${{ steps.build.outputs.digest }}"
 
       - name: Verify signature (keyless)
+        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
         run: |
           cosign verify \
             --certificate-identity-regexp="^https://github.com/${{ github.repository }}/.*" \
