@@ -7,6 +7,11 @@ on:
   pull_request:
     paths: [services/frontend/**, .github/workflows/reusable-react.yml, .github/workflows/ci-frontend.yml]
 
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
 jobs:
   ci:
     uses: ./.github/workflows/reusable-react.yml

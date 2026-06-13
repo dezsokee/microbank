@@ -68,6 +68,7 @@ jobs:
     permissions:
       packages: write
       contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -89,10 +90,26 @@ jobs:
             TAGS="$TAGS,$IMG:latest"
           fi
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          echo "image=$IMG" >> "$GITHUB_OUTPUT"
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
 
       - name: Build and push image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ${{ inputs.service_path }}
           push: true
           tags: ${{ steps.tags.outputs.tags }}
+
+      - name: Sign image with Cosign (keyless)
+        continue-on-error: false
+        run: cosign sign --yes "${{ steps.tags.outputs.image }}@${{ steps.build.outputs.digest }}"
+
+      - name: Verify signature (keyless)
+        run: |
+          cosign verify \
+            --certificate-identity-regexp="^https://github.com/${{ github.repository }}/.*" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            "${{ steps.tags.outputs.image }}@${{ steps.build.outputs.digest }}"

@@ -7,6 +7,11 @@ on:
   pull_request:
     paths: [services/api-gateway/**, .github/workflows/reusable-go.yml, .github/workflows/ci-api-gateway.yml]
 
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
 jobs:
   ci:
     uses: ./.github/workflows/reusable-go.yml
