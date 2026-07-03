@@ -7,6 +7,11 @@ on:
   pull_request:
     paths: [services/transaction-service/**, .github/workflows/reusable-spring-kotlin.yml, .github/workflows/ci-transaction-service.yml]
   workflow_dispatch:
+    inputs:
+      cosign_enabled:
+        description: 'Enable Cosign signing and verification'
+        type: boolean
+        default: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,3 +28,4 @@ jobs:
     with:
       service_name: transaction-service
       service_path: services/transaction-service
+      cosign_enabled: ${{ github.event_name != 'workflow_dispatch' || inputs.cosign_enabled }}

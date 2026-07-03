@@ -9,6 +9,10 @@ on:
       service_path:
         required: true
         type: string
+      cosign_enabled:
+        required: false
+        type: boolean
+        default: true
 env:
   GO_VERSION: "1.22"
   REGISTRY: ghcr.io
@@ -93,6 +97,7 @@ jobs:
           echo "image=$IMG" >> "$GITHUB_OUTPUT"
 
       - name: Install Cosign
+        if: inputs.cosign_enabled
         uses: sigstore/cosign-installer@v3
 
       - name: Build and push image
@@ -104,12 +109,12 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
 
       - name: Sign image with Cosign (keyless)
-        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
+        if: inputs.cosign_enabled && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
         continue-on-error: false
         run: cosign sign --yes "${{ steps.tags.outputs.image }}@${{ steps.build.outputs.digest }}"
 
       - name: Verify signature (keyless)
-        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
+        if: inputs.cosign_enabled && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
         run: |
           cosign verify \
             --certificate-identity-regexp="^https://github.com/${{ github.repository }}/.*" \

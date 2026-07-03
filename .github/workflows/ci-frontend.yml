@@ -7,6 +7,11 @@ on:
   pull_request:
     paths: [services/frontend/**, .github/workflows/reusable-react.yml, .github/workflows/ci-frontend.yml]
   workflow_dispatch:
+    inputs:
+      cosign_enabled:
+        description: 'Enable Cosign signing and verification'
+        type: boolean
+        default: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,3 +28,4 @@ jobs:
     with:
       service_name: frontend
       service_path: services/frontend
+      cosign_enabled: ${{ github.event_name != 'workflow_dispatch' || inputs.cosign_enabled }}
