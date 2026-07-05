@@ -9,6 +9,10 @@ on:
       service_path:
         required: true
         type: string
+      cosign_enabled:
+        required: false
+        type: boolean
+        default: true
 env:
   GO_VERSION: "1.22"
   REGISTRY: ghcr.io
@@ -68,6 +72,7 @@ jobs:
     permissions:
       packages: write
       contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -89,10 +94,29 @@ jobs:
             TAGS="$TAGS,$IMG:latest"
           fi
           echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          echo "image=$IMG" >> "$GITHUB_OUTPUT"
+
+      - name: Install Cosign
+        if: inputs.cosign_enabled
+        uses: sigstore/cosign-installer@v3
 
       - name: Build and push image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ${{ inputs.service_path }}
-          push: true
+          push: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
           tags: ${{ steps.tags.outputs.tags }}
+
+      - name: Sign image with Cosign (keyless)
+        if: inputs.cosign_enabled && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
+        continue-on-error: false
+        run: cosign sign --yes "${{ steps.tags.outputs.image }}@${{ steps.build.outputs.digest }}"
+
+      - name: Verify signature (keyless)
+        if: inputs.cosign_enabled && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
+        run: |
+          cosign verify \
+            --certificate-identity-regexp="^https://github.com/${{ github.repository }}/.*" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            "${{ steps.tags.outputs.image }}@${{ steps.build.outputs.digest }}"

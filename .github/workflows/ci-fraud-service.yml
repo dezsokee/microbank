@@ -6,6 +6,21 @@ on:
     paths: [services/fraud-service/**, .github/workflows/reusable-go.yml, .github/workflows/ci-fraud-service.yml]
   pull_request:
     paths: [services/fraud-service/**, .github/workflows/reusable-go.yml, .github/workflows/ci-fraud-service.yml]
+  workflow_dispatch:
+    inputs:
+      cosign_enabled:
+        description: 'Enable Cosign signing and verification'
+        type: boolean
+        default: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
 
 jobs:
   ci:
@@ -13,3 +28,4 @@ jobs:
     with:
       service_name: fraud-service
       service_path: services/fraud-service
+      cosign_enabled: ${{ github.event_name != 'workflow_dispatch' || inputs.cosign_enabled }}
