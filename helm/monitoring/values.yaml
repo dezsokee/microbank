@@ -38,5 +38,12 @@ grafana:
 ingress:
   enabled: true
   className: nginx
-  grafanaHost: grafana.microbank.local
-  prometheusHost: prometheus.microbank.local
+  grafanaHost: grafana.mk.local
+  prometheusHost: prometheus.mk.local
+  # TLS a grafana/prometheus hostokra. Ha nincs kezzel megadott secret, a Helm
+  # generel egy self-signed tanusitvanyt (a bongeszo egyszeri figyelmeztetese
+  # utan elfogadhato). Lokalis minikube-hoz eleg; production-ben csereld le
+  # cert-manager / valos tanusitvanyra.
+  tls:
+    enabled: true
+    secretName: monitoring-tls
