@@ -47,3 +47,21 @@ ingress:
   tls:
     enabled: true
     secretName: monitoring-tls
+
+# Kyverno admission-controller metrics scrape.
+# Exposes kyverno_admission_review_duration_seconds, kyverno_admission_requests_total,
+# kyverno_policy_execution_duration_seconds, kyverno_policy_results, ... on port 8000.
+kyverno:
+  enabled: true
+  namespace: kyverno
+  # Admission-controller metrics Service. Verify with:
+  #   kubectl -n kyverno get svc | grep metrics
+  # (older installs: kyverno-svc-metrics; split-controller installs may differ)
+  metricsService: kyverno-svc-metrics
+  metricsPort: 8000
+
+# kube-apiserver /metrics scrape — provides the "outside" view of webhook latency
+# (apiserver_admission_webhook_admission_duration_seconds). Requires the ClusterRole
+# in prometheus-rbac.yaml and the ServiceAccount token mounted into the Prometheus pod.
+apiServer:
+  scrape: true

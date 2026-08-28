@@ -74,3 +74,26 @@ data:
           - targets: ["{{ .Values.microbankReleaseName }}-notification-service:8086"]
             labels:
               service: notification-service
+{{- if .Values.kyverno.enabled }}
+
+      # Kyverno admission controller — supply-chain / admission-latency measurement
+      - job_name: "kyverno"
+        metrics_path: /metrics
+        static_configs:
+          - targets: ["{{ .Values.kyverno.metricsService }}.{{ .Values.kyverno.namespace }}.svc.cluster.local:{{ .Values.kyverno.metricsPort }}"]
+            labels:
+              service: kyverno
+{{- end }}
+{{- if .Values.apiServer.scrape }}
+
+      # kube-apiserver — "outside" view of admission webhook latency
+      # (apiserver_admission_webhook_admission_duration_seconds). Needs the
+      # ClusterRole in prometheus-rbac.yaml + mounted ServiceAccount token.
+      - job_name: "kube-apiserver"
+        scheme: https
+        static_configs:
+          - targets: ["kubernetes.default.svc:443"]
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+{{- end }}

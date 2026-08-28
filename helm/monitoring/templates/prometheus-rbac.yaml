@@ -4,3 +4,31 @@ metadata:
   name: {{ include "monitoring.fullname" . }}-prometheus
   labels:
     {{- include "monitoring.labels" . | nindent 4 }}
+{{- if .Values.apiServer.scrape }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "monitoring.fullname" . }}-prometheus
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+rules:
+  # Scrape the kube-apiserver /metrics endpoint (admission webhook latency).
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "monitoring.fullname" . }}-prometheus
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "monitoring.fullname" . }}-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "monitoring.fullname" . }}-prometheus
+    namespace: {{ .Values.namespace }}
+{{- end }}
