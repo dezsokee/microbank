@@ -1,0 +1,76 @@
+# ==============================================================================
+# "B" mérési forgatókönyv: validate-only policy (hálózati hívás NÉLKÜL).
+#
+# Célja a benchmarkban: a TISZTA policy-motor költségét mérni. Ezek a szabályok
+# pusztán CPU-ban dőlnek el (minta-illesztés a Pod-objektumon), nincs Rekor/
+# registry hívás — szemben a verify-microbank-images (C) policy-vel.
+#
+# Így a három szám szépen szétáll:
+#   A (nincs policy)  -> admission-overhead ~0
+#   B (ez a policy)   -> A + policy-motor költsége
+#   C (verifyImages)  -> B + aláírás-ellenőrzés (hálózat) költsége
+#
+# FONTOS: validationFailureAction: Audit — a szabály LEFUT és MÉRHETŐ marad
+# (ugyanaz a kiértékelési költség, mint Enforce esetén), de NEM blokkolja a
+# podokat. Így a futó microbank workloadon is biztonságosan mérhetsz: ha egy
+# szabály bukna, a pod akkor is elindul. Ha a dolgozathoz Enforce viselkedést
+# akarsz demonstrálni, állítsd Enforce-ra — a latency-számok azonosak.
+# ==============================================================================
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: validate-microbank-standards
+spec:
+  validationFailureAction: Audit
+  background: false
+  rules:
+    # 1) Mutable tag tiltása — olcsó string-minta a container image-eken.
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - student-research
+      validate:
+        message: "A ':latest' (mutable) image tag nem engedelyezett."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"
+
+    # 2) Kotelezo label — az objektum metaadatainak ellenorzese.
+    - name: require-app-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - student-research
+      validate:
+        message: "A podnak rendelkeznie kell 'app.kubernetes.io/name' labellel."
+        pattern:
+          metadata:
+            labels:
+              app.kubernetes.io/name: "?*"
+
+    # 3) Kotelezo resource requests — beagyazott mezok bejarasa a spec-ben.
+    - name: require-resource-requests
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - student-research
+      validate:
+        message: "CPU es memory resource request megadasa kotelezo."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    memory: "?*"
+                    cpu: "?*"
