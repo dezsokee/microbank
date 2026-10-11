@@ -382,3 +382,378 @@ data:
       "title": "MicroBank Overview",
       "uid": "microbank-overview"
     }
+
+  istio-mesh-latency.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [],
+      "panels": [
+        {
+          "title": "mTLS Coverage (mesh traffic)",
+          "type": "stat",
+          "description": "Share of inter-service requests reported as connection_security_policy=mutual_tls by the destination sidecar. Excludes kubelet probe traffic (source_workload=unknown). Should read ~100% once STRICT PeerAuthentication + ISTIO_MUTUAL DestinationRule are applied.",
+          "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "expr": "100 * sum(rate(istio_requests_total{reporter=\"destination\", source_workload!=\"unknown\", connection_security_policy=\"mutual_tls\"}[5m])) / sum(rate(istio_requests_total{reporter=\"destination\", source_workload!=\"unknown\"}[5m]))",
+              "legendFormat": "mTLS %"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "max": 100,
+              "min": 0,
+              "thresholds": {
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 90 },
+                  { "color": "green", "value": 99.9 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Request Rate per Hop (source → destination)",
+          "type": "timeseries",
+          "description": "Service-to-service call rate as seen by each destination sidecar. One line per (source_workload, destination_workload) pair — a single transfer fans out into 6+ distinct hops (api-gateway→transaction-service, transaction-service→account/fraud/exchange/notification/audit-service).",
+          "gridPos": { "h": 8, "w": 18, "x": 6, "y": 0 },
+          "targets": [
+            {
+              "expr": "sum by (source_workload, destination_workload) (rate(istio_requests_total{reporter=\"destination\", source_workload!=\"unknown\"}[5m]))",
+              "legendFormat": "{{`{{source_workload}}`}} → {{`{{destination_workload}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "P50 Latency by Hop",
+          "type": "timeseries",
+          "description": "Envoy-observed latency per hop — measured by the destination sidecar, so it includes TLS/mTLS handshake and proxy processing time that app-level metrics (http_request_duration_seconds etc.) miss entirely.",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (source_workload, destination_workload, le) (rate(istio_request_duration_milliseconds_bucket{reporter=\"destination\", source_workload!=\"unknown\"}[5m])))",
+              "legendFormat": "{{`{{source_workload}}`}} → {{`{{destination_workload}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "P95 Latency by Hop",
+          "type": "timeseries",
+          "description": "Envoy-observed P95 latency per hop. This is the layer where mTLS overhead actually shows up first (new-handshake tail), before it's visible in app-level timers.",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (source_workload, destination_workload, le) (rate(istio_request_duration_milliseconds_bucket{reporter=\"destination\", source_workload!=\"unknown\"}[5m])))",
+              "legendFormat": "{{`{{source_workload}}`}} → {{`{{destination_workload}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "P99 Latency by Hop",
+          "type": "timeseries",
+          "description": "Envoy-observed P99 latency per hop.",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum by (source_workload, destination_workload, le) (rate(istio_request_duration_milliseconds_bucket{reporter=\"destination\", source_workload!=\"unknown\"}[5m])))",
+              "legendFormat": "{{`{{source_workload}}`}} → {{`{{destination_workload}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "mTLS vs Plaintext Latency (all hops blended)",
+          "type": "timeseries",
+          "description": "P50/P95/P99 grouped by connection_security_policy instead of by hop. Only useful for comparison once some traffic is deliberately left in PERMISSIVE/plaintext (e.g. before applying k8s/istio/peer-authentication-strict.yaml, or for a baseline run) — under the current STRICT policy this should collapse to a single mutual_tls series.",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (connection_security_policy, le) (rate(istio_request_duration_milliseconds_bucket{reporter=\"destination\", source_workload!=\"unknown\"}[5m])))",
+              "legendFormat": "p50 {{`{{connection_security_policy}}`}}"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (connection_security_policy, le) (rate(istio_request_duration_milliseconds_bucket{reporter=\"destination\", source_workload!=\"unknown\"}[5m])))",
+              "legendFormat": "p95 {{`{{connection_security_policy}}`}}"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (connection_security_policy, le) (rate(istio_request_duration_milliseconds_bucket{reporter=\"destination\", source_workload!=\"unknown\"}[5m])))",
+              "legendFormat": "p99 {{`{{connection_security_policy}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "Latency Distribution Heatmap — transaction-service inbound",
+          "type": "heatmap",
+          "description": "Full distribution of all inbound hops to transaction-service (api-gateway→transaction-service). A second high-latency band appearing under load indicates handshake-vs-reused-connection split — invisible on percentile lines.",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+          "targets": [
+            {
+              "expr": "sum by (le) (rate(istio_request_duration_milliseconds_bucket{reporter=\"destination\", destination_workload=\"microbank-transaction-service\", source_workload!=\"unknown\"}[1m]))",
+              "format": "heatmap",
+              "legendFormat": "{{`{{le}}`}}"
+            }
+          ],
+          "options": {
+            "calculate": false,
+            "yAxis": { "unit": "ms" },
+            "color": { "scheme": "Spectral", "mode": "scheme" },
+            "cellGap": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "scaleDistribution": { "type": "linear" },
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false }
+              }
+            }
+          }
+        },
+        {
+          "title": "Per-Hop P50 / P95 / P99 Summary",
+          "type": "table",
+          "description": "Snapshot table, one row per hop, for quickly reading off numbers into a benchmark writeup.",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (source_workload, destination_workload, le) (rate(istio_request_duration_milliseconds_bucket{reporter=\"destination\", source_workload!=\"unknown\"}[5m])))",
+              "format": "table",
+              "instant": true,
+              "legendFormat": "p50"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (source_workload, destination_workload, le) (rate(istio_request_duration_milliseconds_bucket{reporter=\"destination\", source_workload!=\"unknown\"}[5m])))",
+              "format": "table",
+              "instant": true,
+              "legendFormat": "p95"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (source_workload, destination_workload, le) (rate(istio_request_duration_milliseconds_bucket{reporter=\"destination\", source_workload!=\"unknown\"}[5m])))",
+              "format": "table",
+              "instant": true,
+              "legendFormat": "p99"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "ms" }
+          }
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["microbank", "istio", "mtls", "latency"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "Istio Mesh Latency (mTLS overhead)",
+      "uid": "istio-mesh-latency"
+    }
+
+  client-side-hop-latency.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [
+        {
+          "title": "How to use this dashboard for baseline vs mTLS comparison",
+          "type": "text",
+          "asDropdown": false
+        }
+      ],
+      "panels": [
+        {
+          "title": "About: mesh-independent baseline comparison",
+          "type": "text",
+          "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+          "options": {
+            "mode": "markdown",
+            "content": "client_request_duration_seconds is emitted by api-gateway (Go) and transaction-service (Kotlin) themselves, around every outbound call — it exists identically whether or not a service mesh is installed. Unlike the Istio dashboard, this one stays valid with `global.serviceMesh.provider=none`. To get a real overhead number: run a load test with no mesh installed, note the P95 per hop below (or export this dashboard), then apply Istio STRICT mTLS and re-run — the delta per hop is the actual mTLS/proxy cost, isolated from app processing time."
+          }
+        },
+        {
+          "title": "Request Rate per Hop (source → destination)",
+          "type": "timeseries",
+          "description": "Outbound call rate as measured by the calling app itself (api-gateway, transaction-service), not by a sidecar.",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
+          "targets": [
+            {
+              "expr": "sum by (service, destination) (rate(client_request_duration_seconds_count[5m]))",
+              "legendFormat": "{{`{{service}}`}} → {{`{{destination}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "P50 Latency by Hop",
+          "type": "timeseries",
+          "description": "App-measured latency per outbound call. With no mesh installed this is close to true wall-clock hop time; with Istio installed it will include whatever the local network stack + iptables redirect + sidecar add, since the app still waits for the full round trip through its own local proxy.",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (service, destination, le) (rate(client_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "{{`{{service}}`}} → {{`{{destination}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "P95 Latency by Hop",
+          "type": "timeseries",
+          "description": "Compare this panel's numbers across two dashboard exports (mesh provider=none vs provider=istio) to isolate the mTLS/proxy overhead per hop.",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (service, destination, le) (rate(client_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "{{`{{service}}`}} → {{`{{destination}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "P99 Latency by Hop",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum by (service, destination, le) (rate(client_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "{{`{{service}}`}} → {{`{{destination}}`}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+            }
+          }
+        },
+        {
+          "title": "Error Rate per Hop (non-2xx / transport errors)",
+          "type": "timeseries",
+          "description": "status=\"error\" means the outbound call never got an HTTP response at all (timeout, connection refused/reset) — worth watching separately when toggling STRICT mTLS, since a misconfigured DestinationRule shows up here first as connection resets, not as slow requests.",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+          "targets": [
+            {
+              "expr": "sum by (service, destination, status) (rate(client_request_duration_seconds_count{status=\"error\"}[5m]) or rate(client_request_duration_seconds_count{status!~\"2..\"}[5m]))",
+              "legendFormat": "{{`{{service}}`}} → {{`{{destination}}`}} ({{`{{status}}`}})"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 },
+              "color": { "mode": "palette-classic" }
+            }
+          }
+        },
+        {
+          "title": "Latency Distribution Heatmap — transaction-service → account-service",
+          "type": "heatmap",
+          "description": "Full distribution for the busiest hop in a transfer. Compare shape (not just percentiles) between a no-mesh run and an mTLS run — a connection-reuse vs fresh-handshake split shows up here as a second band.",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 28 },
+          "targets": [
+            {
+              "expr": "sum by (le) (rate(client_request_duration_seconds_bucket{service=\"transaction-service\"}[1m]))",
+              "format": "heatmap",
+              "legendFormat": "{{`{{le}}`}}"
+            }
+          ],
+          "options": {
+            "calculate": false,
+            "yAxis": { "unit": "s" },
+            "color": { "scheme": "Spectral", "mode": "scheme" },
+            "cellGap": 1
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "scaleDistribution": { "type": "linear" },
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false }
+              }
+            }
+          }
+        },
+        {
+          "title": "Per-Hop P50 / P95 / P99 Summary",
+          "type": "table",
+          "description": "Snapshot table for reading numbers straight into a benchmark writeup. Run once with no mesh, screenshot/export, then again with Istio STRICT mTLS — the row-by-row delta is the overhead.",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 36 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (service, destination, le) (rate(client_request_duration_seconds_bucket[5m])))",
+              "format": "table",
+              "instant": true,
+              "legendFormat": "p50"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (service, destination, le) (rate(client_request_duration_seconds_bucket[5m])))",
+              "format": "table",
+              "instant": true,
+              "legendFormat": "p95"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (service, destination, le) (rate(client_request_duration_seconds_bucket[5m])))",
+              "format": "table",
+              "instant": true,
+              "legendFormat": "p99"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": { "unit": "s" }
+          }
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["microbank", "baseline", "mtls", "latency"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "Client-Side Hop Latency (mesh-independent)",
+      "uid": "client-hop-latency"
+    }

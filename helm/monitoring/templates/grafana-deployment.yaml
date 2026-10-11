@@ -14,12 +14,6 @@ spec:
     metadata:
       labels:
         app: grafana
-      annotations:
-        {{- if eq .Values.serviceMesh.provider "istio" }}
-        sidecar.istio.io/inject: "false"
-        {{- else if eq .Values.serviceMesh.provider "linkerd" }}
-        linkerd.io/inject: disabled
-        {{- end }}
     spec:
       containers:
         - name: grafana

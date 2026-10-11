@@ -166,11 +166,24 @@ var (
 		},
 		[]string{"method", "path"},
 	)
+	// Mesh-independent hop latency: measured by the calling application itself,
+	// around each outbound call to a downstream service. Unlike the Istio sidecar's
+	// istio_request_duration_milliseconds, this metric exists whether or not a
+	// service mesh is present, so the same query is comparable baseline vs mTLS.
+	clientRequestDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "client_request_duration_seconds",
+			Help:    "Duration of outbound HTTP requests to downstream services, as observed by the calling application (mesh-independent).",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"destination", "method", "status"},
+	)
 )
 
 func init() {
 	prometheus.MustRegister(httpRequestsTotal)
 	prometheus.MustRegister(httpRequestDuration)
+	prometheus.MustRegister(clientRequestDuration)
 }
 
 // ---------------------------------------------------------------------------
@@ -201,10 +214,28 @@ func (r *statusRecorder) WriteHeader(code int) {
 }
 
 // ---------------------------------------------------------------------------
+// Outbound call timing helper
+// ---------------------------------------------------------------------------
+
+// timeClientCall records client_request_duration_seconds for a single outbound
+// call, independent of any service mesh sidecar.
+func timeClientCall(destination, method string, statusCode int, err error, start time.Time) {
+	status := "error"
+	if err == nil {
+		status = fmt.Sprintf("%d", statusCode)
+	}
+	clientRequestDuration.WithLabelValues(destination, method, status).Observe(time.Since(start).Seconds())
+}
+
+// ---------------------------------------------------------------------------
 // Auth middleware
 // ---------------------------------------------------------------------------
 
 func authMiddleware(authServiceURL string) func(http.Handler) http.Handler {
+	authDestination := authServiceURL
+	if parsed, err := url.Parse(authServiceURL); err == nil {
+		authDestination = parsed.Hostname()
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -217,7 +248,13 @@ func authMiddleware(authServiceURL string) func(http.Handler) http.Handler {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
 
 			validateURL := fmt.Sprintf("%s/internal/validate?token=%s", authServiceURL, url.QueryEscape(token))
+			start := time.Now()
 			resp, err := http.Get(validateURL)
+			statusCode := 0
+			if resp != nil {
+				statusCode = resp.StatusCode
+			}
+			timeClientCall(authDestination, http.MethodGet, statusCode, err, start)
 			if err != nil {
 				logger.Error("auth service unreachable", map[string]string{"error": err.Error()})
 				writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication service unavailable")
@@ -253,6 +290,24 @@ func authMiddleware(authServiceURL string) func(http.Handler) http.Handler {
 // Reverse proxy factory
 // ---------------------------------------------------------------------------
 
+// metricsRoundTripper wraps an http.RoundTripper and records
+// client_request_duration_seconds for every request it proxies.
+type metricsRoundTripper struct {
+	destination string
+	next        http.RoundTripper
+}
+
+func (m *metricsRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	start := time.Now()
+	resp, err := m.next.RoundTrip(req)
+	statusCode := 0
+	if resp != nil {
+		statusCode = resp.StatusCode
+	}
+	timeClientCall(m.destination, req.Method, statusCode, err, start)
+	return resp, err
+}
+
 func newReverseProxy(target string) http.Handler {
 	targetURL, err := url.Parse(target)
 	if err != nil {
@@ -260,7 +315,10 @@ func newReverseProxy(target string) http.Handler {
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
-	proxy.Transport = otelhttp.NewTransport(http.DefaultTransport)
+	proxy.Transport = &metricsRoundTripper{
+		destination: targetURL.Hostname(),
+		next:        otelhttp.NewTransport(http.DefaultTransport),
+	}
 
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {

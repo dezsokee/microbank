@@ -2,9 +2,11 @@ namespace: student-research
 microbankReleaseName: microbank
 
 serviceMesh:
-  # Active mesh in the cluster. Prometheus + Grafana opt out of injection
-  # under either mesh so the metrics path has no sidecar overhead.
-  # One of: istio | linkerd | none.
+  # Active mesh in the cluster. Prometheus + Grafana are injected like any
+  # other workload (namespace-wide istio-injection: enabled) so they can
+  # scrape app metrics endpoints under STRICT mTLS — without a sidecar they
+  # have no identity and every scrape gets reset once PeerAuthentication is
+  # STRICT. One of: istio | linkerd | none.
   provider: istio
 
 prometheus:
