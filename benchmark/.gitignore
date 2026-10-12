@@ -1,0 +1,4 @@
+# Raw measurement output (CSV samples, k6 exports, logs)
+results/
+# Generated Linkerd manifests (contain the identity issuer key)
+.build/

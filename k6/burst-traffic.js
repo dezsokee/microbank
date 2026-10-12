@@ -1,16 +1,19 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { provisionUsers, vuUser, transferTarget } from './lib/users.js';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
+const MAX_VUS = 100;
 
 export const options = {
+  setupTimeout: '5m',
   stages: [
-    { duration: '30s', target: 100 },  // spike to 100 users
-    { duration: '1m', target: 100 },   // stay at 100
-    { duration: '30s', target: 0 },    // drop to 0
-    { duration: '30s', target: 100 },  // spike again
-    { duration: '1m', target: 100 },   // stay at 100
-    { duration: '30s', target: 0 },    // ramp down
+    { duration: '30s', target: MAX_VUS },  // spike to 100 users
+    { duration: '1m', target: MAX_VUS },   // stay at 100
+    { duration: '30s', target: 0 },        // drop to 0
+    { duration: '30s', target: MAX_VUS },  // spike again
+    { duration: '1m', target: MAX_VUS },   // stay at 100
+    { duration: '30s', target: 0 },        // ramp down
   ],
   thresholds: {
     http_req_duration: ['p(95)<2000'],
@@ -18,18 +21,23 @@ export const options = {
   },
 };
 
-const users = ['alice', 'bob', 'charlie'];
+// One dedicated user per VU — see lib/users.js for why sharing alice/bob/charlie
+// across 100 VUs breaks authentication.
+export function setup() {
+  return provisionUsers(BASE_URL, MAX_VUS);
+}
 
 function login(username) {
   const res = http.post(`${BASE_URL}/api/v1/auth/login`, JSON.stringify({ username }), {
     headers: { 'Content-Type': 'application/json' },
   });
-  return res.status === 200 ? res.json().token : null;
+  check(res, { 'login success': (r) => r.status === 200 });
+  return res.status === 200 ? res.json('token') : null;
 }
 
-export default function () {
-  const username = users[Math.floor(Math.random() * users.length)];
-  const token = login(username);
+export default function (users) {
+  const me = vuUser(users);
+  const token = login(me.username);
   if (!token) return;
 
   const authHeaders = {
@@ -40,21 +48,26 @@ export default function () {
   };
 
   // Rapid-fire requests simulating burst
-  http.get(`${BASE_URL}/api/v1/accounts/me/balance`, authHeaders);
-  http.get(`${BASE_URL}/api/v1/exchange-rates`, authHeaders);
+  const balanceRes = http.get(`${BASE_URL}/api/v1/accounts/me/balance`, authHeaders);
+  check(balanceRes, { 'get balance': (r) => r.status === 200 });
+  const ratesRes = http.get(`${BASE_URL}/api/v1/exchange-rates`, authHeaders);
+  check(ratesRes, { 'get rates': (r) => r.status === 200 });
 
   const accountsRes = http.get(`${BASE_URL}/api/v1/accounts/me`, authHeaders);
+  check(accountsRes, { 'get accounts': (r) => r.status === 200 });
   if (accountsRes.status === 200) {
     const accounts = accountsRes.json();
     if (accounts && accounts.length > 0) {
-      http.post(`${BASE_URL}/api/v1/transactions/transfer`, JSON.stringify({
+      const transferRes = http.post(`${BASE_URL}/api/v1/transactions/transfer`, JSON.stringify({
         fromAccountId: accounts[0].id,
-        toAccountId: accounts[0].id,
+        toAccountId: transferTarget(users),
         amount: 0.01,
         currency: accounts[0].currency || 'EUR',
       }), authHeaders);
+      check(transferRes, { 'transfer': (r) => r.status === 200 });
 
-      http.get(`${BASE_URL}/api/v1/transactions?accountId=${accounts[0].id}`, authHeaders);
+      const txRes = http.get(`${BASE_URL}/api/v1/transactions?accountId=${accounts[0].id}`, authHeaders);
+      check(txRes, { 'get transactions': (r) => r.status === 200 });
     }
   }
 
