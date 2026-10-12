@@ -1,6 +1,6 @@
 # Service mesh overhead — baseline vs Istio vs Linkerd
 
-Ez a dokumentum azt méri, mennyi **késleltetési és erőforrás-többletet (CPU, RAM)** okoz a MicroBank rendszerben a service mesh alapú mTLS. A mérés ugyanazt a telepítést hasonlítja össze három változatban: mesh nélkül (baseline), Istióval és Linkerddel. A nyers adatok a [resource-benchmark-istio-vs-baseline.xlsx](resource-benchmark-istio-vs-baseline.xlsx) fájlban vannak, a mérőeszközök a [`benchmark/`](../benchmark/README.md) könyvtárban.
+Ez a dokumentum azt méri, mennyi **késleltetési és erőforrás-többletet (CPU, RAM)** okoz a MicroBank rendszerben a service mesh alapú mTLS. A mérés ugyanazt a telepítést hasonlítja össze három változatban: mesh nélkül (baseline), Istióval és Linkerddel. A nyers adatok a [resource-benchmark-istio-vs-baseline.xlsx](resource-benchmark-istio-vs-baseline.xlsx) fájlban vannak, a mérőeszközök a [`README.md`](README.md)-ben leírt szkriptek.
 
 ---
 

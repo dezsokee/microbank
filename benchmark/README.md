@@ -42,7 +42,7 @@ benchmark/run.sh istio baseline linkerd restore-istio     # ~1,5–2 óra
 OUT_DIR=benchmark/results/linkerd-run benchmark/run.sh linkerd restore-istio
 
 # riport (több results könyvtár is összefésülhető)
-python benchmark/build_xlsx.py benchmark/results/<run1> [benchmark/results/<run2>] docs/resource-benchmark.xlsx
+python benchmark/build_xlsx.py benchmark/results/<run1> [benchmark/results/<run2>] benchmark/resource-benchmark.xlsx
 python benchmark/analyze.py benchmark/results/<run>
 ```
 
