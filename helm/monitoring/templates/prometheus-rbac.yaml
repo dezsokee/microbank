@@ -34,3 +34,35 @@ subjects:
   - kind: ServiceAccount
     name: {{ include "monitoring.fullname" . }}-prometheus
     namespace: {{ .Values.namespace }}
+---
+# Cluster-scoped: node discovery + the apiserver's node proxy, so the
+# "kubelet-resource" job can read /metrics/resource (the Prometheus form of the
+# kubelet Summary API — per-container CPU and working set, sidecars included).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "monitoring.fullname" . }}-prometheus-{{ .Values.namespace }}
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes/proxy"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "monitoring.fullname" . }}-prometheus-{{ .Values.namespace }}
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "monitoring.fullname" . }}-prometheus-{{ .Values.namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "monitoring.fullname" . }}-prometheus
+    namespace: {{ .Values.namespace }}

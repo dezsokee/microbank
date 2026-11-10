@@ -132,30 +132,32 @@ data:
           }
         },
         {
-          "title": "CPU Usage by Pod",
+          "title": "CPU Usage by Pod (cores, app + sidecar)",
           "type": "timeseries",
+          "description": "kubelet /metrics/resource (Summary API data): all containers of the pod, sidecar included. Per-container split: Container Resources (kubelet) dashboard.",
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
           "targets": [
             {
-              "expr": "sum by (pod) (rate(process_cpu_seconds_total{job!=\"prometheus\"}[5m]))",
-              "legendFormat": "{{`{{pod}}`}}"
+              "expr": "sum by (service) (rate(container_cpu_usage_seconds_total{namespace=\"{{ .Values.namespace }}\"}[1m]))",
+              "legendFormat": "{{`{{service}}`}}"
             }
           ],
           "fieldConfig": {
             "defaults": {
-              "unit": "percentunit",
+              "unit": "short",
               "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
             }
           }
         },
         {
-          "title": "Memory Usage by Pod",
+          "title": "Memory Usage by Pod (working set, app + sidecar)",
           "type": "timeseries",
+          "description": "kubelet /metrics/resource (Summary API data): all containers of the pod, sidecar included. Per-container split: Container Resources (kubelet) dashboard.",
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
           "targets": [
             {
-              "expr": "sum by (pod) (process_resident_memory_bytes{job!=\"prometheus\"})",
-              "legendFormat": "{{`{{pod}}`}}"
+              "expr": "sum by (service) (container_memory_working_set_bytes{namespace=\"{{ .Values.namespace }}\"})",
+              "legendFormat": "{{`{{service}}`}}"
             }
           ],
           "fieldConfig": {
@@ -756,4 +758,875 @@ data:
       "time": { "from": "now-1h", "to": "now" },
       "title": "Client-Side Hop Latency (mesh-independent)",
       "uid": "client-hop-latency"
+    }
+
+  container-resources.json: |
+    {
+      "annotations": {
+        "list": []
+      },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "links": [],
+      "panels": [
+        {
+          "title": "CPU \u2014 total",
+          "type": "stat",
+          "description": "All containers in the namespace, CPU cores (1 = one full core). Source: kubelet /metrics/resource.",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\"}[1m]))",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              },
+              "decimals": 2
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "area",
+            "colorMode": "value"
+          }
+        },
+        {
+          "title": "CPU \u2014 app",
+          "type": "stat",
+          "description": "Application containers (incl. Postgres), CPU cores.",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 4,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", kind=\"app\"}[1m]))",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              },
+              "decimals": 2
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "area",
+            "colorMode": "value"
+          }
+        },
+        {
+          "title": "CPU \u2014 sidecars",
+          "type": "stat",
+          "description": "istio-proxy / linkerd-proxy containers, CPU cores. 0 in baseline.",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 8,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", kind=\"sidecar\"}[1m])) or vector(0)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              },
+              "decimals": 3
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "area",
+            "colorMode": "value"
+          }
+        },
+        {
+          "title": "Sidecar share of CPU",
+          "type": "stat",
+          "description": "Sidecar CPU / total namespace CPU.",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 12,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "(sum(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", kind=\"sidecar\"}[1m])) or vector(0)) / sum(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\"}[1m]))",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              },
+              "decimals": 1
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "area",
+            "colorMode": "value"
+          }
+        },
+        {
+          "title": "Memory \u2014 total",
+          "type": "stat",
+          "description": "Working set of all containers in the namespace.",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 16,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum(container_memory_working_set_bytes{namespace=~\"$namespace\"})",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              },
+              "decimals": 1
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "area",
+            "colorMode": "value"
+          }
+        },
+        {
+          "title": "Memory \u2014 sidecars",
+          "type": "stat",
+          "description": "Working set of istio-proxy / linkerd-proxy containers.",
+          "gridPos": {
+            "h": 4,
+            "w": 4,
+            "x": 20,
+            "y": 0
+          },
+          "targets": [
+            {
+              "expr": "sum(container_memory_working_set_bytes{namespace=~\"$namespace\", kind=\"sidecar\"}) or vector(0)",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              },
+              "decimals": 1
+            }
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ]
+            },
+            "graphMode": "area",
+            "colorMode": "value"
+          }
+        },
+        {
+          "title": "CPU: app vs sidecar (cores)",
+          "type": "timeseries",
+          "description": "Stacked: total namespace CPU split into application containers and mesh sidecars.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 4
+          },
+          "targets": [
+            {
+              "expr": "sum by (kind) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\"}[1m]))",
+              "legendFormat": "{{`{{kind}}`}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 25,
+                "lineWidth": 1,
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "sortBy": "Mean",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "title": "Memory: app vs sidecar (working set)",
+          "type": "timeseries",
+          "description": "Stacked: total namespace working set split into application containers and mesh sidecars.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 4
+          },
+          "targets": [
+            {
+              "expr": "sum by (kind) (container_memory_working_set_bytes{namespace=~\"$namespace\"})",
+              "legendFormat": "{{`{{kind}}`}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 25,
+                "lineWidth": 1,
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "sortBy": "Mean",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "title": "CPU by service \u2014 app + sidecar (cores)",
+          "type": "timeseries",
+          "description": "Per pod (app container + its sidecar), stacked.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 12
+          },
+          "targets": [
+            {
+              "expr": "sum by (service) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\"}[1m]))",
+              "legendFormat": "{{`{{service}}`}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 25,
+                "lineWidth": 1,
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "sortBy": "Mean",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "title": "Memory by service \u2014 app + sidecar",
+          "type": "timeseries",
+          "description": "Per pod (app container + its sidecar), stacked.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 12
+          },
+          "targets": [
+            {
+              "expr": "sum by (service) (container_memory_working_set_bytes{namespace=~\"$namespace\"})",
+              "legendFormat": "{{`{{service}}`}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 25,
+                "lineWidth": 1,
+                "stacking": {
+                  "mode": "normal",
+                  "group": "A"
+                }
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "sortBy": "Mean",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "title": "CPU by container (cores)",
+          "type": "timeseries",
+          "description": "Every container separately; sidecars appear as <service> / istio-proxy (or linkerd-proxy).",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 20
+          },
+          "targets": [
+            {
+              "expr": "sum by (service, container) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\"}[1m]))",
+              "legendFormat": "{{`{{service}}`}} / {{`{{container}}`}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 2
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "sortBy": "Mean",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "title": "Memory by container (working set)",
+          "type": "timeseries",
+          "description": "Every container separately; sidecars appear as <service> / istio-proxy (or linkerd-proxy).",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 20
+          },
+          "targets": [
+            {
+              "expr": "sum by (service, container) (container_memory_working_set_bytes{namespace=~\"$namespace\"})",
+              "legendFormat": "{{`{{service}}`}} / {{`{{container}}`}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 2
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "sortBy": "Mean",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "title": "Sidecar CPU by service (cores)",
+          "type": "timeseries",
+          "description": "Mesh proxy CPU only. Empty in baseline.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 28
+          },
+          "targets": [
+            {
+              "expr": "sum by (service) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", kind=\"sidecar\"}[1m]))",
+              "legendFormat": "{{`{{service}}`}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 2
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "sortBy": "Mean",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "title": "Sidecar memory by service",
+          "type": "timeseries",
+          "description": "Mesh proxy working set only. Empty in baseline.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 28
+          },
+          "targets": [
+            {
+              "expr": "sum by (service) (container_memory_working_set_bytes{namespace=~\"$namespace\", kind=\"sidecar\"})",
+              "legendFormat": "{{`{{service}}`}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 2
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "sortBy": "Mean",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "title": "Mesh control plane CPU (cores)",
+          "type": "timeseries",
+          "description": "istiod / Linkerd control plane pods (all their containers).",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 36
+          },
+          "targets": [
+            {
+              "expr": "sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{namespace=~\"istio-system|linkerd\"}[1m]))",
+              "legendFormat": "{{`{{namespace}}`}} / {{`{{pod}}`}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 2
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "sortBy": "Mean",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "title": "Mesh control plane memory",
+          "type": "timeseries",
+          "description": "istiod / Linkerd control plane pods (all their containers).",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 36
+          },
+          "targets": [
+            {
+              "expr": "sum by (namespace, pod) (container_memory_working_set_bytes{namespace=~\"istio-system|linkerd\"})",
+              "legendFormat": "{{`{{namespace}}`}} / {{`{{pod}}`}}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 2
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "sortBy": "Mean",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "title": "Node CPU (cores)",
+          "type": "timeseries",
+          "description": "Whole minikube node as reported by the kubelet, vs. the sum of containers.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 44
+          },
+          "targets": [
+            {
+              "expr": "sum by (node) (rate(node_cpu_usage_seconds_total[1m]))",
+              "legendFormat": "node {{`{{node}}`}}",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\"}[1m]))",
+              "legendFormat": "namespace $namespace",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(rate(container_cpu_usage_seconds_total[1m]))",
+              "legendFormat": "all containers",
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 2
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "sortBy": "Mean",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        },
+        {
+          "title": "Node memory (working set)",
+          "type": "timeseries",
+          "description": "Whole minikube node as reported by the kubelet, vs. the sum of containers.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 44
+          },
+          "targets": [
+            {
+              "expr": "sum by (node) (node_memory_working_set_bytes)",
+              "legendFormat": "node {{`{{node}}`}}",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(container_memory_working_set_bytes{namespace=~\"$namespace\"})",
+              "legendFormat": "namespace $namespace",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(container_memory_working_set_bytes)",
+              "legendFormat": "all containers",
+              "refId": "C"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "min": 0,
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 2
+              }
+            }
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "right",
+              "calcs": [
+                "mean",
+                "max"
+              ],
+              "sortBy": "Mean",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          }
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 39,
+      "tags": [
+        "microbank",
+        "resources",
+        "kubelet",
+        "mtls"
+      ],
+      "templating": {
+        "list": [
+          {
+            "name": "namespace",
+            "label": "Namespace",
+            "type": "query",
+            "query": {
+              "query": "label_values(container_cpu_usage_seconds_total, namespace)",
+              "refId": "ns"
+            },
+            "definition": "label_values(container_cpu_usage_seconds_total, namespace)",
+            "current": {
+              "text": "{{ .Values.namespace }}",
+              "value": "{{ .Values.namespace }}"
+            },
+            "refresh": 1,
+            "sort": 1,
+            "includeAll": false,
+            "multi": false
+          }
+        ]
+      },
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
+      "title": "Container Resources (kubelet)",
+      "uid": "container-resources"
     }
