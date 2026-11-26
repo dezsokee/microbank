@@ -18,7 +18,6 @@ Minden stacknél: átkonfigurálás → minden pod újraindítása (Postgres el�
 | `sampler.py` | 10 s-onként: konténerenkénti kumulatív CPU-idő + working set a kubelet Summary API-ból (`kubectl get --raw /api/v1/nodes/minikube/proxy/stats/summary`), teljes node a `docker stats minikube`-ból → `containers.csv`, `node.csv` |
 | `prepare_linkerd.py` | `k8s/linkerd/*.yaml` → UTF-8 + klasszikus sidecar mód (a native sidecart a K8s 1.28 nem támogatja), kimenet: `.build/linkerd/` |
 | `build_xlsx.py` | Excel riport: k6 eredmények, CPU-ms/kérés, kategóriánkénti erőforrás, összehasonlítás, service-bontás, idősorok, módszertan |
-| `analyze.py` | Gyors markdown összefoglaló (`report.md`) |
 
 ## Előfeltételek
 
@@ -43,7 +42,6 @@ OUT_DIR=benchmark/results/linkerd-run benchmark/run.sh linkerd restore-istio
 
 # riport (több results könyvtár is összefésülhető)
 python benchmark/build_xlsx.py benchmark/results/<run1> [benchmark/results/<run2>] benchmark/resource-benchmark.xlsx
-python benchmark/analyze.py benchmark/results/<run>
 ```
 
 A `restore-istio` csak visszaállítja az Istio konfigurációt, nem mér. Az eredmények a `benchmark/results/<időbélyeg>/` alá kerülnek (git-ignore-olt).
