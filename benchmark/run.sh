@@ -24,12 +24,13 @@ BASE_URL=${BASE_URL:-http://$(minikube ip 2>/dev/null)}
 R=$(native "$REPO")
 # Same for every stack: chart values as installed, OTel endpoint env vars off (no collector
 # runs during the benchmark; the SDKs still fall back to localhost:4318, which fails locally
-# and never crosses a sidecar), plus raised CPU limits for the two bottleneck services (at 500m the
+# and never crosses a sidecar), plus raised CPU limits for the bottleneck components (at 500m the
 # transaction-service readiness probe times out under peak/burst and the pod drops out
-# of the endpoints → 503s).
+# of the endpoints → 503s; postgres sat at its 500m limit during peak/burst).
 HELM_COMMON=(--set global.otel.enabled=false
              --set account-service.resources.limits.cpu=1500m
-             --set transaction-service.resources.limits.cpu=1500m)
+             --set transaction-service.resources.limits.cpu=1500m
+             --set postgres.resources.limits.cpu=1500m)
 # api-gateway + transaction-service images with client_request_duration_seconds, built
 # inside minikube's docker daemon (see README). Skipped if they are not present.
 INSTRUMENTED=("api-gateway:microbank-api-gateway:test-instrumented"
