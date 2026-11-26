@@ -18,11 +18,12 @@ Minden stacknél: átkonfigurálás → minden pod újraindítása (Postgres el�
 | `sampler.py` | 10 s-onként: konténerenkénti kumulatív CPU-idő + working set a kubelet Summary API-ból (`kubectl get --raw /api/v1/nodes/minikube/proxy/stats/summary`), teljes node a `docker stats minikube`-ból → `containers.csv`, `node.csv` |
 | `prepare_linkerd.py` | `k8s/linkerd/*.yaml` → UTF-8 + klasszikus sidecar mód (a native sidecart a K8s 1.28 nem támogatja), kimenet: `.build/linkerd/` |
 | `build_xlsx.py` | Excel riport: k6 eredmények, CPU-ms/kérés, kategóriánkénti erőforrás, összehasonlítás, service-bontás, idősorok, módszertan |
+| `resource-benchmark-istio-vs-baseline.xlsx` | Egy korábbi (Istio vs baseline) futásból generált riport |
 
 ## Előfeltételek
 
 - minikube (docker driver), pl. `minikube start --driver=docker --cpus=6 --memory=10g --disk-size=40g` + `minikube addons enable ingress`. Windowson a WSL2 memóriát `%UserProfile%\.wslconfig`-ban kell megemelni (pl. `memory=12GB`); a gépen ezen felül legyen legalább ~4 GB szabad RAM, különben a futás leállhat.
-- Telepítve: `istio-base` + `istiod` (Helm, `istio-system`), `microbank` és `monitoring` Helm release a `student-research` namespace-ben (lásd a projekt dokumentációját).
+- Telepítve: `istio-base` + `istiod` (Helm, `istio-system`), `microbank` és `monitoring` Helm release a `student-research` namespace-ben (lásd a [README Kubernetes fejezetét](../README.md#kubernetes-deployment-helm)). A Linkerd control plane-t nem kell előre telepíteni: ha hiányzik, a `run.sh` a `prepare_linkerd.py` kimenetéből telepíti.
 - Docker (a k6 a `grafana/k6` image-ből fut a `minikube` Docker hálózaton, ezért a saját CPU-ja nem kerül a mérésbe), `kubectl`, `helm`.
 - Python 3 + `openpyxl`, `pyyaml` (`pip install openpyxl pyyaml`).
 - Opcionális: az instrumentált (`client_request_duration_seconds`) api-gateway és transaction-service image a minikube Docker daemonjában. Ha nincs meg, a `run.sh` a chart image-ét használja:
@@ -44,12 +45,13 @@ OUT_DIR=benchmark/results/linkerd-run benchmark/run.sh linkerd restore-istio
 python benchmark/build_xlsx.py benchmark/results/<run1> [benchmark/results/<run2>] benchmark/resource-benchmark.xlsx
 ```
 
-A `restore-istio` csak visszaállítja az Istio konfigurációt, nem mér. Az eredmények a `benchmark/results/<időbélyeg>/` alá kerülnek (git-ignore-olt).
+A `restore-istio` csak visszaállítja az Istio konfigurációt, nem mér. Környezeti változók: `OUT_DIR` (results könyvtár), `BASE_URL` (az ingress címe a `minikube` Docker hálózatról, alapból `http://$(minikube ip)`), `PYTHON` (Python interpreter). Az eredmények a `benchmark/results/<időbélyeg>/` alá kerülnek (git-ignore-olt).
 
 ## Fontos tudnivalók
 
 - **Egyszerre csak egy `run.sh` fusson.** Két párhuzamos futás ugyanazokat a `k6-vu-*` usereket használja, kölcsönösen érvénytelenítik egymás tokenjét (401-ek), és mindkettő ugyanabba a `phase.txt`-be ír. Ugyanarra a results könyvtárra a lockfájl védi, de más könyvtárba írva nem. Ha egy futást megszakítasz, ellenőrizd, hogy nem maradt-e árva `run.sh` processz.
 - **k6 userek:** az auth-service felhasználónként egy tokent tárol, és minden login felülírja. A peak/burst/normal szkriptek ezért VU-nként saját usert használnak (`k6/lib/users.js`).
+- **OpenTelemetry kikapcsolva:** a `run.sh` minden stacknél `--set global.otel.enabled=false`-szal frissíti a `microbank` release-t, így a szolgáltatások nem kapnak `OTEL_*` környezeti változót, és a mérés alatt nem fut OTel collector (a trace/metrika export nem terheli a mérést).
 - **CPU limitek:** a `run.sh` az account- és transaction-service CPU limitjét 1500m-re emeli (minden stacknél azonosan). 500m-en a transaction-service readiness probe-ja peak/burst alatt kiesik, és a pod kikerül az endpointok közül.
 - **Linkerd és a Grafana:** `all-authenticated` policy mellett a nem meshelt ingress csak az api-gateway-t és a frontendet éri el; a Grafana ilyenkor `kubectl port-forward`-dal érhető el.
 - **Korlátok:** egy node, a k6 ugyanazon a gépen fut, kombinációnként egyetlen futás. Az eredmények egymáshoz viszonyítva értelmezhetők, abszolút értékként nem.

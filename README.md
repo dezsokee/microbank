@@ -2,8 +2,8 @@
 
 A microservice-based fintech mock application simulating a simplified banking system. Built as the test workload for a master's dissertation researching **Software Supply Chain Security** and **Zero Trust (mTLS) architecture** in Kubernetes environments.
 
-**Current scope:** Local development with Docker Compose, plus Kubernetes deployment via Helm with switchable service-mesh providers (Istio or Linkerd) for mTLS benchmarking — see `helm/microbank/`, `k8s/istio/`, and `k8s/linkerd/`. Toggle via `--set global.serviceMesh.provider=istio|linkerd|none`.
-**Future scope:** SPIFFE/SPIRE workload identity, Sigstore image signing, and Cilium-based zero-trust networking.
+**Current scope:** Local development with Docker Compose, plus Kubernetes deployment via Helm with switchable service-mesh providers (Istio or Linkerd) for mTLS benchmarking — see `helm/microbank/`, `k8s/istio/`, and `k8s/linkerd/`. Toggle via `--set global.serviceMesh.provider=istio|linkerd|none`. Images are built in GitHub Actions and signed with Sigstore Cosign (keyless); a Kyverno policy (`kyverno/cosign-policy.yaml`) can enforce the signatures in the cluster. A resource/latency benchmark (baseline vs Istio vs Linkerd) lives in `benchmark/`.
+**Future scope:** SPIFFE/SPIRE workload identity and Cilium-based zero-trust networking.
 
 ---
 
@@ -48,7 +48,7 @@ A microservice-based fintech mock application simulating a simplified banking sy
                         └──────────────────────────────┘
 ```
 
-A single money transfer generates **6–8 internal service-to-service HTTP calls**, making it ideal for measuring mTLS overhead:
+A single money transfer generates **10–11 internal service-to-service HTTP calls**, making it ideal for measuring mTLS overhead:
 
 ```
 Client (browser or k6)
@@ -62,6 +62,7 @@ API Gateway
                 ├── GET  → Account Service    (sender balance check)
                 ├── GET  → Account Service    (recipient exists?)
                 ├── POST → Fraud Service      (fraud check)
+                ├── GET  → Account Service    (recipient currency)
                 ├── GET  → Exchange Service   (rate, if cross-currency)
                 ├── PUT  → Account Service    (debit sender)
                 ├── PUT  → Account Service    (credit recipient)
@@ -238,7 +239,7 @@ The most complex service — orchestrates the entire transfer flow:
 5. Sends notification (Notification Service) — fire-and-forget
 6. Creates audit log entry (Audit Service) — fire-and-forget
 
-Transaction status flow: `PENDING` → `FRAUD_CHECKED` → `PROCESSING` → `COMPLETED` | `FAILED` | `REJECTED`
+Transaction status flow: `PENDING` → `FRAUD_CHECKED` → `COMPLETED` | `FAILED` | `REJECTED`
 
 ### Fraud Detection Service (Go)
 
@@ -246,7 +247,7 @@ Stateless fraud rule engine. Evaluates transactions against configurable rules (
 
 ### Exchange Rate Service (Python/FastAPI)
 
-Serves hard-coded exchange rates with EUR as the base currency. Supports rate lookup and amount conversion.
+Serves exchange rates with EUR as the base currency. Rates are fetched from the Frankfurter API (`RATES_API_URL`, default `https://api.frankfurter.dev/v1/latest`) and cached for `RATES_CACHE_TTL_SECONDS` (default 300 s); if the API is unreachable within `RATES_API_TIMEOUT_SECONDS` (default 3 s), the service falls back to hard-coded rates. Supports rate lookup and amount conversion.
 
 ### Notification Service (Python/FastAPI)
 
@@ -269,7 +270,7 @@ PostgreSQL 16 runs on port `5432` with credentials `microbank:microbank`. Four i
 | `transaction_db` | Transaction Service | `transactions` |
 | `audit_db` | Audit Service | `audit_logs` |
 
-Databases are created by `init.sql`. Schemas are auto-managed by Hibernate (`ddl-auto: update`) for Spring Boot services and by Go migrations for the Auth Service.
+Databases are created by `init.sql`. Schemas are auto-managed by Hibernate (`ddl-auto: update`) for Spring Boot services; the Auth Service creates its `users` table on startup (`CREATE TABLE IF NOT EXISTS`) and seeds `alice`, `bob`, `charlie`.
 
 ```bash
 # Connect to a database
@@ -305,6 +306,10 @@ k6 run --vus 2 --duration 30s k6/normal-traffic.js
 
 The tests exercise the full transfer chain: login → get accounts → check balance → get rates → execute transfer → list transactions.
 
+Because the Auth Service stores only one token per user (every login overwrites it), the scripts do not share `alice`/`bob`/`charlie` between VUs. In `setup()`, `k6/lib/users.js` registers (or logs in) one dedicated user per VU (`k6-vu-1` … `k6-vu-<N>`) with a funded EUR account, and each VU transfers to the next VU's account.
+
+For the mesh comparison (baseline vs Istio vs Linkerd on Kubernetes), these three scripts are run back-to-back by `benchmark/run.sh` — see [Benchmark](#benchmark-baseline-vs-istio-vs-linkerd).
+
 ---
 
 ## Observability
@@ -326,6 +331,13 @@ Every service is instrumented for Prometheus scraping:
 Key metrics:
 - `http_requests_total{method, path, status}` — request counter
 - `http_request_duration_seconds{method, path}` — latency histogram
+- `client_request_duration_seconds` — outbound-call latency measured by the caller itself (api-gateway and transaction-service), independent of any service mesh
+
+On Kubernetes, `helm/monitoring` deploys Prometheus + Grafana. Prometheus scrapes the services above, the Istio sidecars (`/stats/prometheus`) and per-container CPU/memory from the kubelet resource metrics endpoint. Grafana is provisioned with four dashboards: *MicroBank Overview*, *Istio Mesh Latency (mTLS overhead)*, *Client-Side Hop Latency (mesh-independent)* and *Container Resources (kubelet)*.
+
+### Distributed Tracing (OpenTelemetry)
+
+All backend services are instrumented with OpenTelemetry (Go and Python SDKs; the OpenTelemetry Java agent for the Spring Boot services) and export OTLP over HTTP to `OTEL_EXPORTER_OTLP_ENDPOINT`. In the Helm deployment the endpoint is injected via `global.otel.enabled` / `global.otel.endpoint` (default `http://otel-otel-collector:4318`); the collector (`helm/otel`) forwards traces, metrics and logs to Honeycomb (`honeycomb.apiKey`). The collector pod is opted out of sidecar injection (set the otel chart's `serviceMesh.provider` to the active mesh so the matching opt-out annotation is emitted).
 
 ### Structured Logging
 
@@ -350,10 +362,22 @@ docker-compose logs | grep -i error
 microbank/
 ├── docker-compose.yml          # Service orchestration
 ├── init.sql                    # Database creation script
+├── .github/workflows/          # CI: per-service ci-*.yml callers + reusable-*.yml per stack
+├── benchmark/                  # Resource/latency benchmark: baseline vs Istio vs Linkerd
+├── docs/                       # CI/CD, Cosign, Istio and Linkerd mTLS documentation (Hungarian)
+├── helm/
+│   ├── microbank/              # Umbrella chart (one subchart per service + postgres)
+│   ├── monitoring/             # Prometheus + Grafana
+│   └── otel/                   # OpenTelemetry Collector (Honeycomb exporter)
+├── k8s/
+│   ├── istio/                  # Namespace, PeerAuthentication (STRICT/DISABLE), DestinationRules
+│   └── linkerd/                # Control plane + CRDs, namespace, authorization policies
+├── kyverno/cosign-policy.yaml  # Admission policy: only Cosign-signed microbank images
 ├── k6/                         # Load test scripts
 │   ├── normal-traffic.js
 │   ├── peak-traffic.js
-│   └── burst-traffic.js
+│   ├── burst-traffic.js
+│   └── lib/users.js            # Per-VU user + account provisioning
 └── services/
     ├── frontend/               # React + TypeScript + Vite + Tailwind
     ├── api-gateway/            # Go — reverse proxy + auth middleware
@@ -423,6 +447,47 @@ npm run dev    # Vite dev server on :5173, proxies /api → localhost:8080
 
 ---
 
+## Kubernetes Deployment (Helm)
+
+Everything runs in the `student-research` namespace (`global.namespace`). Images are pulled from `ghcr.io/dezsokee/microbank-<service>:latest` (`global.imageRegistry`, `global.imageTag`). The umbrella ingress routes `/api` to the API Gateway and `/` to the frontend (`ingressClassName: nginx`).
+
+```bash
+# Namespaces: istio-system + student-research (with istio-injection=enabled)
+kubectl apply -f k8s/istio/isto-ns.yaml
+# then install istio-base + istiod from the Istio Helm repo into istio-system
+
+helm install microbank  helm/microbank  -n student-research
+helm install monitoring helm/monitoring -n student-research
+helm install otel       helm/otel       -n student-research --set honeycomb.apiKey=<key>
+
+# STRICT mTLS (or peer-authentication-disable.yaml to turn it off)
+kubectl apply -f k8s/istio/peer-authentication-strict.yaml -f k8s/istio/destination-rules.yaml
+```
+
+The release names matter: the default OTel endpoint and the Istio DestinationRules assume `microbank` and `otel`.
+
+**Service mesh switch.** `global.serviceMesh.provider` (`istio` | `linkerd` | `none`, default `istio`) selects which inject annotation the pod templates get. All application pods (the eight backend services and the frontend) are opted in; Postgres and the OTel collector are always opted out. The monitoring chart sets no inject annotation, so Prometheus and Grafana follow the namespace-level injection setting (they are meshed under Istio and Linkerd). Mesh-level resources are applied separately:
+
+- **Istio:** `k8s/istio/peer-authentication-strict.yaml` + `destination-rules.yaml` — see [docs/Istio_mTLS_documentation.md](docs/Istio_mTLS_documentation.md)
+- **Linkerd:** `k8s/linkerd/linkerd-crds.yaml`, `linkerd-control-plane.yaml`, `linkerd-ns.yaml`, then `authorization-policies-strict.yaml` (or `-disable.yaml`) — see [docs/Linkerd_mTLS_documentation.md](docs/Linkerd_mTLS_documentation.md)
+
+**Image signing.** CI signs every pushed image with Cosign keyless signing; `kyverno/cosign-policy.yaml` rejects unsigned `ghcr.io/dezsokee/microbank-*` images in `student-research`. See [docs/CI-CD_documentation.md](docs/CI-CD_documentation.md) and [docs/Cosign_keyless_signing_documentation.md](docs/Cosign_keyless_signing_documentation.md).
+
+---
+
+## Benchmark: Baseline vs Istio vs Linkerd
+
+`benchmark/run.sh` measures the same deployment on a single minikube node with three configurations — `baseline` (no mesh), `istio` (STRICT mTLS) and `linkerd` (`all-authenticated`). For each stack it reconfigures the mesh, restarts all pods, runs a warm-up, 2 min idle, then `k6/normal-traffic.js` → `peak-traffic.js` → `burst-traffic.js` with 1 min cool-downs, while `benchmark/sampler.py` records per-container CPU/memory every 10 s. OpenTelemetry export is switched off for the measurement (`--set global.otel.enabled=false`), so no OTel collector runs during the benchmark. `benchmark/build_xlsx.py` turns the results into an Excel report.
+
+```bash
+benchmark/run.sh istio baseline linkerd restore-istio
+python benchmark/build_xlsx.py benchmark/results/<run> benchmark/resource-benchmark.xlsx
+```
+
+Prerequisites, details and caveats: [benchmark/README.md](benchmark/README.md).
+
+---
+
 ## Environment Variables
 
 All services are configured via environment variables, making them ready for Kubernetes deployment.
@@ -449,6 +514,8 @@ All services are configured via environment variables, making them ready for Kub
 | `NOTIFICATION_SERVICE_URL` | `http://notification-service:8086` | transaction-service |
 | `AUDIT_SERVICE_URL` | `http://audit-service:8087` | transaction-service |
 
+In the Helm chart these URLs are prefixed with the release name (e.g. `http://microbank-account-service:8082`).
+
 ---
 
 ## Design Decisions
@@ -456,5 +523,5 @@ All services are configured via environment variables, making them ready for Kub
 - **Polyglot stack:** Intentionally uses 5 different languages/frameworks to represent a realistic heterogeneous microservice environment for security research.
 - **Simplified auth:** No passwords or JWT — token-based only. The dissertation focuses on mTLS (service-to-service security), not user authentication mechanisms.
 - **Database-per-service:** Each stateful service has its own isolated database, following microservices best practices. No cross-service database access.
-- **Fire-and-forget side effects:** Notification and audit calls from the Transaction Service are non-blocking — their failure does not fail the transfer.
+- **Fire-and-forget side effects:** Notification and audit calls from the Transaction Service are made synchronously after the transfer is committed, but their errors are caught and only logged — their failure does not fail the transfer.
 - **Kubernetes-ready:** All services are stateless (except via their databases), configured via environment variables, expose health endpoints, and run in minimal Docker images via multi-stage builds.

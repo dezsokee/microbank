@@ -58,9 +58,11 @@ A rövid érvényességi idő kulcsfontosságú: ha egy munkaterhelés-tanúsít
 
 ### 4.1 A vezérlősík és a névterek előkészítése
 
-Az Istio telepítése két névtér létrehozásával és konfigurálásával kezdődik. Az **istio-system** névtérbe kerül maga az Istio vezérlősíkja — elsősorban az **istiod** nevű komponens. A munkaterheléseket futtató névtérre (jelen projektben: **student-research**) egy speciális `istio-injection: enabled` jelölőt (label) kell elhelyezni.
+Az Istio telepítése két névtér létrehozásával és konfigurálásával kezdődik. Az **istio-system** névtérbe kerül maga az Istio vezérlősíkja — elsősorban az **istiod** nevű komponens. A munkaterheléseket futtató névtérre (jelen projektben: **student-research**) egy speciális `istio-injection: enabled` jelölőt (label) kell elhelyezni. A projektben mindkét névteret a `k8s/istio/isto-ns.yaml` hozza létre (a label-lel együtt).
 
 Ez a label közli a Kubernetes admission webhook mechanizmusával, hogy ebbe a névtérbe kerülő minden podba automatikusan be kell injektálni az Istio adatoldali proxyját. Ez az injekciós mechanizmus az egész biztonsági modell alapja — maga az alkalmazáskód nem tud arról, hogy egy proxy veszi körbe.
+
+A Helm chart a podok szintjén is rögzíti a döntést a `global.serviceMesh.provider=istio` beállítás alapján: az alkalmazás podok (a nyolc backend szolgáltatás és a frontend) `sidecar.istio.io/inject: "true"`, a Postgres és az OTel collector `sidecar.istio.io/inject: "false"` annotációt kap. A Prometheus és a Grafana (`helm/monitoring`) nem kap annotációt, így a névtér label-je alapján ők is sidecar-t kapnak — erre szükségük is van, mert STRICT mTLS mellett identitás nélkül nem tudnák scrape-elni az alkalmazásokat.
 
 ### 4.2 istiod — az Istio vezérlősík
 
@@ -98,7 +100,6 @@ flowchart TB
         end
         PA["PeerAuthentication\nbejövő mTLS kényszer"]
         DR["DestinationRule\nkimenő TLS mód"]
-        TEL["Telemetry\ntracing konfiguráció"]
     end
 
     subgraph EXCL["Sidecar nélküli podok"]
@@ -110,7 +111,7 @@ flowchart TB
     APISERVER <-->|"pod lifecycle értesítések"| ISTIOD
     ISTIOD -->|"xDS API — listeners, routes, clusters"| PROXY
     ISTIOD -->|"SDS API — X.509 tanúsítvány és kulcs"| PROXY
-    PA & DR & TEL -->|"policy értelmezés"| ISTIOD
+    PA & DR -->|"policy értelmezés"| ISTIOD
     PROXY -.->|"mTLS bypass — TLS mode: DISABLE"| EXCL
 ```
 
@@ -258,7 +259,7 @@ Három üzemmód létezik:
 - **PERMISSIVE** — elfogad mTLS és titkosítatlan forgalmat egyaránt. Átmeneti állapothoz, legacy szolgáltatások bevonásához hasznos.
 - **DISABLE** — teljesen letiltja az mTLS-t, csak titkosítatlan kapcsolatokat fogad el. Hibakereséshez vagy nem meshed hívók integrációjához szükséges.
 
-A jelen projektben a névtér egésze STRICT módban fut, de az egyes belépési pontokon (api-gateway, frontend) portszinten PERMISSIVE kivétel érvéyes — azért, mert a külső NGINX ingress controller nem meshed, és nem tud mTLS-t küldeni.
+A jelen projektben (`k8s/istio/peer-authentication-strict.yaml`) a névtér egésze STRICT módban fut, de az ingressen elérhető belépési pontokon portszinten PERMISSIVE kivétel érvényes: `api-gateway:8080`, `frontend:80`, valamint a monitoring felületei, `grafana:3000` és `prometheus:9090` — azért, mert a külső NGINX ingress controller nem meshed, és nem tud mTLS-t küldeni. Az OTel collectorra is vonatkozik egy PERMISSIVE PeerAuthentication, de mivel annak nincs sidecar-ja, ez gyakorlatilag hatástalan. A `k8s/istio/peer-authentication-disable.yaml` ugyanazt az erőforrást (`microbank-mtls-strict`) DISABLE módra állítja.
 
 ### 7.2 DestinationRule — kimenő forgalom
 
@@ -267,14 +268,16 @@ Míg a PeerAuthentication a szerver oldalát (bejövő) szabályozza, a **Destin
 A leggyakoribb üzemmód az **ISTIO_MUTUAL**, amelynél az Istio automatikusan biztosítja a tanúsítványokat a kliens Envoy proxy számára — az alkalmazásnak semmiféle TLS konfigurációt nem kell végzenie.
 
 A projektben egy névtérszintű alap DestinationRule van érvényben, amely az összes belső szolgáltatásra ISTIO_MUTUAL módot ír elő. Ezen felül két kivétel szerepel:
-- A **Postgres adatbázis** kap egy DISABLE szabályt, mivel nem rendelkezik sidecar-ral és nem tud mTLS-t fogadni. Ennek hiányában az adatbázist használó szolgáltatások indításkor CrashLoop állapotba esnek.
+- A **Postgres adatbázis** kap egy DISABLE szabályt, mivel nem rendelkezik sidecar-ral és nem tud mTLS-t fogadni. Ennek hiányában az adatbázist használó szolgáltatások indításkor CrashLoop állapotba esnek. A DISABLE csak a TLS-t kapcsolja ki: a kliens oldali Envoy továbbra is elfogja az 5432-es portra menő kapcsolatot, és sima TCP-ként továbbítja (a Linkerd-del ellentétben, ahol a `skip-outbound-ports: "5432"` a proxyt teljesen megkerüli).
 - Az **OTel collector** szintén DISABLE kivételt kap ugyanezen okból.
 
 ---
 
 ## 8. Telemetria
 
-Az Istio **Telemetry** erőforrásán keresztül konfigurálja a nyomkövetést (tracing). A projektben minden kérés 100%-ban nyomkövetett, és az adatok az OTel collectorra kerülnek. Az Istio az Envoy proxy szintjén automatikusan propagálja a trace kontextust a szolgáltatások között (W3C Trace Context fejlécek), így az elosztott nyomkövetés az alkalmazáskód módosítása nélkül is működik.
+A projekt nem használ Istio **Telemetry** erőforrást, és az Envoy proxyk nem küldenek span-eket. Az elosztott nyomkövetést maguk a szolgáltatások végzik OpenTelemetry instrumentációval (Go és Python SDK, a Spring Boot szolgáltatásoknál az OpenTelemetry Java agent): a trace kontextust (W3C Trace Context fejlécek) az alkalmazások propagálják, és OTLP/HTTP-n az OTel collectorra (`otel-otel-collector:4318`) küldik, amely a Honeycomb felé továbbítja. Mivel a collector nem meshed, a felé irányuló forgalomra a `otel-collector-plaintext` DestinationRule (DISABLE) vonatkozik.
+
+Az Istio szintű metrikákat (pl. `istio_request_duration_milliseconds`) a Prometheus közvetlenül az Envoy sidecarokból gyűjti (`/stats/prometheus`); ezekre épül a Grafana *Istio Mesh Latency (mTLS overhead)* dashboardja.
 
 ---
 
@@ -283,7 +286,7 @@ Az Istio **Telemetry** erőforrásán keresztül konfigurálja a nyomkövetést 
 Az alábbiakban nyomon követhető egy pénzátutalási kérés útja a MicroBank rendszerben, Istio mTLS mellett:
 
 **1. Külső kérés belépése:**
-Az NGINX ingress controller HTTPS kérést küld az api-gateway-nek a 8080-as porton. Ez a port PERMISSIVE módban van konfigurálva, így a nem meshed NGINX is tud kapcsolódni — az Istio proxy fogadja a plaintext forgalmat.
+Az NGINX ingress controller HTTP kérést küld az api-gateway-nek a 8080-as porton. Ez a port PERMISSIVE módban van konfigurálva, így a nem meshed NGINX is tud kapcsolódni — az Istio proxy fogadja a plaintext forgalmat.
 
 **2. Belső hívás: api-gateway → transaction-service:**
 Az api-gateway alkalmazása HTTP kérést küld a transaction-service-nek. Az iptables szabályok az Envoy kimeneti listenerére irányítják ezt a forgalmat. Az Envoy ellenőrzi a DestinationRule-t (ISTIO_MUTUAL), elvégzi az mTLS kézfogást a transaction-service Envoy proxy-jával, majd titkosított csatornán küldi a kérést.
@@ -292,7 +295,7 @@ Az api-gateway alkalmazása HTTP kérést küld a transaction-service-nek. Az ip
 A transaction-service a kérés feldolgozása során maga is hív más szolgáltatásokat: account-service-t (egyenleg ellenőrzés, terhelés/jóváírás), fraud-service-t (tranzakciós ellenőrzés), exchange-service-t (devizaárfolyam), notification-service-t (értesítés) és audit-service-t (naplózás). Minden egyes ilyen hívás ugyanazon az mTLS-csatornán halad — automatikusan, az alkalmazáskód tudta nélkül.
 
 **4. Adatbázis-kapcsolat:**
-Az account-service a Postgres felé is kapcsolódik. Ez nem megy az mTLS csatornán — a DestinationRule DISABLE kivétele értelmében a Postgres-hez irányuló forgalom titkosítatlan TCP marad. A Postgres nem rendelkezik Envoy sidecar-ral, ezért nem tudna mTLS-t fogadni.
+Az account-service (ahogy az auth-, transaction- és audit-service is) a Postgres felé is kapcsolódik. Ez nem megy az mTLS csatornán — a DestinationRule DISABLE kivétele értelmében a Postgres-hez irányuló forgalom titkosítatlan TCP marad, bár a kliens pod Envoy sidecar-ján továbbra is áthalad. A Postgres nem rendelkezik Envoy sidecar-ral, ezért nem tudna mTLS-t fogadni.
 
 ---
 

@@ -23,8 +23,8 @@ A rendszer kilenc mikroszolgáltatást fed le, öt különböző technológiai s
 
 A pipeline két réteg workflow-ból épül fel:
 
-- **Reusable (újrafelhasználható) workflow** — stackenként egy fájl (összesen 5), amely a teljes `lint → test → build-and-push` logikát tartalmazza. Ezeket a `workflow_call` eseménnyel lehet meghívni, és `service_name`, valamint `service_path` bemeneti paramétereket fogadnak.
-- **Caller (hívó) workflow** — szolgáltatásonként egy fájl (összesen 9), amely mindössze a megfelelő reusable workflow-t hívja meg, átadva a szolgáltatás nevét és útvonalát.
+- **Reusable (újrafelhasználható) workflow** — stackenként egy fájl (összesen 5), amely a teljes `lint → test → build-and-push` logikát tartalmazza. Ezeket a `workflow_call` eseménnyel lehet meghívni, és `service_name`, `service_path`, valamint az opcionális `cosign_enabled` (boolean, alapértelmezés: `true`) bemeneti paramétereket fogadnak.
+- **Caller (hívó) workflow** — szolgáltatásonként egy fájl (összesen 9), amely mindössze a megfelelő reusable workflow-t hívja meg, átadva a szolgáltatás nevét, útvonalát és a `cosign_enabled` kapcsolót.
 
 Ez a minta biztosítja, hogy az azonos technológiai stack-en futó szolgáltatások (például a három Go szolgáltatás) pontosan ugyanazt a logikát fussák, mindenféle másolás nélkül. Egy stack CI-logikájának módosítása egyetlen fájlban történik.
 
@@ -60,9 +60,9 @@ A projekt egyetlen Git repository-ban (monorepo) tárolja az összes szolgáltat
 | api-gateway | `ci-api-gateway.yml` | `reusable-go.yml` | Go 1.22 |
 | auth-service | `ci-auth-service.yml` | `reusable-go.yml` | Go 1.22 |
 | fraud-service | `ci-fraud-service.yml` | `reusable-go.yml` | Go 1.22 |
-| account-service | `ci-account-service.yml` | `reusable-spring-kotlin.yml` | Kotlin / Spring Boot 21 |
-| transaction-service | `ci-transaction-service.yml` | `reusable-spring-kotlin.yml` | Kotlin / Spring Boot 21 |
-| audit-service | `ci-audit-service.yml` | `reusable-spring-java.yml` | Java / Spring Boot 21 |
+| account-service | `ci-account-service.yml` | `reusable-spring-kotlin.yml` | Kotlin / Spring Boot 3.2 (JDK 21) |
+| transaction-service | `ci-transaction-service.yml` | `reusable-spring-kotlin.yml` | Kotlin / Spring Boot 3.2 (JDK 21) |
+| audit-service | `ci-audit-service.yml` | `reusable-spring-java.yml` | Java 21 / Spring Boot 3.2 |
 | exchange-service | `ci-exchange-service.yml` | `reusable-python.yml` | Python 3.12 |
 | notification-service | `ci-notification-service.yml` | `reusable-python.yml` | Python 3.12 |
 | frontend | `ci-frontend.yml` | `reusable-react.yml` | React / Node 20 |
@@ -91,7 +91,7 @@ flowchart LR
         L["lint"] --> T["test"] --> B["build-and-push"]
     end
 
-    C1 -->|"workflow_call<br/>service_name, service_path"| RG
+    C1 -->|"workflow_call<br/>service_name, service_path,<br/>cosign_enabled"| RG
     C2 -->|"workflow_call"| RK
     C3 -->|"workflow_call"| RP
     C4 -->|"workflow_call"| RO
@@ -114,9 +114,9 @@ Minden caller workflow három eseményre indulhat:
 
 - **`push` a `main` ágra** — a kanonikus kiadási (release) esemény. A kód már bekerült a fő ágba.
 - **`pull_request`** — minden megnyitott vagy frissített PR validációja.
-- **`workflow_dispatch`** — kézi indítás bármely ágról, az Actions felületről vagy a `gh workflow run` paranccsal.
+- **`workflow_dispatch`** — kézi indítás bármely ágról, az Actions felületről vagy a `gh workflow run` paranccsal. Egyetlen bemenete a `cosign_enabled` (boolean, alapértelmezés: `true`), amellyel az aláírás és ellenőrzés kikapcsolható — ez a Cosign pipeline-overhead méréséhez készült.
 
-Mindhárom eseményt útvonal-szűrő (`paths`) korlátozza (a `workflow_dispatch` kivételével, amely manuális).
+A `push` és `pull_request` eseményeket útvonal-szűrő (`paths`) korlátozza; a `workflow_dispatch` manuális, arra nem vonatkozik szűrő.
 
 ### 3.2 A háromrétegű modell
 
@@ -125,7 +125,7 @@ A pipeline szándékosan elválasztja a *validációt* (olcsó, minden változá
 | Esemény | Lint + Test | `docker build` | Push GHCR-be | Cosign sign + verify |
 |---|:---:|:---:|:---:|:---:|
 | **`pull_request`** | ✅ | ✅ (validál) | ❌ | ❌ |
-| **`workflow_dispatch`** (bármely ág) | ✅ | ✅ | ✅ | ✅ |
+| **`workflow_dispatch`** (bármely ág) | ✅ | ✅ | ✅ (`main`-ről +`:latest`) | ✅ (ha `cosign_enabled`) |
 | **`push` → `main`** | ✅ | ✅ | ✅ (+`:latest`) | ✅ |
 
 A `build-and-push` jobban ezt egyetlen feltétel vezérli, amelyet a kép feltöltésére és az aláíró/ellenőrző lépésekre egyaránt alkalmazunk:
@@ -133,6 +133,14 @@ A `build-and-push` jobban ezt egyetlen feltétel vezérli, amelyet a kép feltö
 ```yaml
 (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
 ```
+
+Az aláíró és ellenőrző lépések (és a Cosign telepítése) ezen felül az `inputs.cosign_enabled` feltételhez is kötöttek. A caller ezt `push` és `pull_request` esetén mindig `true`-ra állítja, csak kézi indításnál veszi át a felhasználó által megadott értéket:
+
+```yaml
+cosign_enabled: ${{ github.event_name != 'workflow_dispatch' || inputs.cosign_enabled }}
+```
+
+> **Figyelem:** `cosign_enabled: false` mellett a kép aláírás nélkül kerül fel a GHCR-be (`main`-ről indítva a `:latest` címkével is). Az ilyen képet a Kyverno policy (`kyverno/cosign-policy.yaml`) a `student-research` névtérben elutasítja.
 
 Pull request esetén tehát a kép felépül (a Dockerfile helyessége ellenőrzött), de **nem kerül feltöltésre és nem kerül aláírásra** — így sem a GHCR, sem a Rekor napló nem szennyeződik be be nem mergelt kódhoz tartozó artifactokkal.
 
@@ -184,8 +192,8 @@ Minden reusable workflow három, egymásra épülő jobból áll (`needs` függ�
 | Stack | Eszközök / parancsok |
 |---|---|
 | **Go 1.22** | `go mod tidy`, majd `golangci-lint` (golangci-lint-action@v6, legfrissebb verzió) |
-| **Kotlin / Spring 21** | `gradle ktlintCheck`, majd `gradle compileKotlin` (Temurin JDK 21, Gradle 8.7) |
-| **Java / Spring 21** | `gradle checkstyleMain checkstyleTest`, majd `gradle compileJava` |
+| **Kotlin / Spring (JDK 21)** | `gradle ktlintCheck`, majd `gradle compileKotlin` (Temurin JDK 21, Gradle 8.7) |
+| **Java / Spring (JDK 21)** | `gradle checkstyleMain checkstyleTest`, majd `gradle compileJava` (Temurin JDK 21, Gradle 8.7) |
 | **Python 3.12** | `ruff check .` (linter), majd `ruff format --check .` (formázás-ellenőrzés) |
 | **React / Node 20** | `npm install`, majd `npx tsc --noEmit` (TypeScript típusellenőrzés) |
 
@@ -210,10 +218,10 @@ A `build-and-push` job mind az 5 reusable workflow-ban azonos. Lépései sorrend
 1. **`actions/checkout@v4`** — a forráskód kicsekkolása.
 2. **`docker/login-action@v3`** — bejelentkezés a GHCR-be a `github.actor` felhasználóval és a `GITHUB_TOKEN`-nel.
 3. **Image tag-ek kiszámítása** (`id: tags`) — lásd a [6. fejezetet](#6-kép-elnevezési-és-címkézési-séma).
-4. **`sigstore/cosign-installer@v3`** — a Cosign telepítése.
+4. **`sigstore/cosign-installer@v3`** — a Cosign telepítése (csak ha `cosign_enabled`).
 5. **`docker/build-push-action@v5`** (`id: build`) — a kép felépítése; feltöltés csak release/dispatch esetén; a lépés natívan visszaadja a kép SHA256 **digestjét** (`steps.build.outputs.digest`).
-6. **Cosign sign** — a kép aláírása digest szerint (csak release/dispatch esetén).
-7. **Cosign verify** — az aláírás azonnali ellenőrzése (csak release/dispatch esetén).
+6. **Cosign sign** — a kép aláírása digest szerint (csak release/dispatch esetén, és ha `cosign_enabled`).
+7. **Cosign verify** — az aláírás azonnali ellenőrzése (csak release/dispatch esetén, és ha `cosign_enabled`).
 
 ---
 
@@ -230,7 +238,7 @@ Az „Image tag-ek kiszámítása” lépés minden futáskor összeállítja a 
 | Címke | Mikor | Cél |
 |---|---|---|
 | `:<git-sha>` | mindig | Pontos, visszakereshető verzió a teljes commit-hash alapján. |
-| `:branch-<ág-neve>` | mindig | Ág-szintű, mutábilis címke (az ágnév megtisztítva: `/` és `_` → `-`). |
+| `:branch-<ág-neve>` | mindig | Ág-szintű, mutábilis címke (az ágnév megtisztítva: `/` és `_` → `-`, minden egyéb, nem `a-zA-Z0-9.-` karakter törölve; PR-nél a forráság neve). |
 | `:latest` | **csak `main`-en** | A legutóbbi stabil kiadás. Feature ágon **soha** nem íródik felül. |
 
 Ez a séma garantálja, hogy egy feature ágon vagy kézi futtatáskor készült teszt-kép `:branch-...` / `:<sha>` címkét kap, és **nem érinti a production `:latest` címkét**.
@@ -337,9 +345,11 @@ Mivel pull request esetén a pipeline csak validál (nem tölt fel és nem ír a
 
 ```bash
 gh workflow run ci-account-service.yml --ref feature/<ág-neve>
+# aláírás nélkül (pl. a Cosign overhead méréséhez):
+gh workflow run ci-account-service.yml --ref feature/<ág-neve> -f cosign_enabled=false
 ```
 
-Ekkor a teljes lánc lefut (build → push → sign → verify) a feature ágon: a kép `:branch-...` / `:<sha>` címkét kap (a `:latest` érintetlen marad), a beépített verify lépés pedig bizonyítja, hogy az aláírás működik — anélkül, hogy a kódot a `main`-be kellene mergelni.
+Ekkor (alapértelmezett `cosign_enabled: true` mellett) a teljes lánc lefut (build → push → sign → verify) a feature ágon: a kép `:branch-...` / `:<sha>` címkét kap (a `:latest` érintetlen marad), a beépített verify lépés pedig bizonyítja, hogy az aláírás működik — anélkül, hogy a kódot a `main`-be kellene mergelni.
 
 ---
 

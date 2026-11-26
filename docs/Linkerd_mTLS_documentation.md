@@ -28,6 +28,8 @@ A Linkerd bizalmi modellje rétegelt CA-hierarchiára épül, hasonlóan az Isti
 
 A Trust Anchor a `linkerd-identity-trust-roots` ConfigMap-ben él, és csak az operátor munkaállomásán található meg fizikailag. A gyökér soha nem kerül hálózati expozícióba.
 
+> **A projektben:** a `k8s/linkerd/linkerd-control-plane.yaml` a `linkerd install` CLI-vel (edge-26.5.3) generált manifest, külön Trust Anchor nélkül. Az Issuer tanúsítvány önaláírt (`CN=identity.linkerd.`, ECDSA P-256, 1 év érvényesség), és ugyanez a tanúsítvány szerepel Trust Anchorként a `linkerd-identity-trust-roots` ConfigMap-ben. Az Issuer privát kulcsa a `linkerd-identity-issuer` Secretben van, és a manifesttel együtt a repóban is.
+
 ### 2.2 Munkaterhelés-identitás
 
 A Linkerd a munkaterheléseket Kubernetes **ServiceAccount** és **névtér** alapján azonosítja. Az identitás DNS-szerű formátumú, és a tanúsítvány SAN mezőjébe van beágyazva. Ez funkcionálisan egyenértékű az Istio SPIFFE URI azonosítójával — ugyanazok az építőelemek (ServiceAccount + névtér), eltérő kódolással. A Linkerd nem használja a SPIFFE URI sémát, de a bizalmi gyökér ugyanolyan erős kriptográfiai alapokon áll.
@@ -45,7 +47,7 @@ Kulcsfontosságú különbség az Istio-tól: a Linkerd-nél az mTLS titkosítá
 | Komponens | Érvényesség | Szerepe |
 |---|---|---|
 | Trust Anchor | ~1 év (ajánlott) | Bizalom gyökere, aláírja a Kiadó CA-t. Csak a `linkerd-identity-trust-roots` ConfigMap-ben és az operátor munkaállomásán él. |
-| Issuer CA | ~1 év | Aláírja a munkaterhelés-tanúsítványokat. A `linkerd-identity` Deployment tárolja. cert-manager integrációval automatikusan rotálható. |
+| Issuer CA | ~1 év | Aláírja a munkaterhelés-tanúsítványokat. A `linkerd-identity-issuer` Secretben tárolódik, a `linkerd-identity` Deployment használja. cert-manager integrációval automatikusan rotálható. |
 | Munkaterhelés-tanúsítvány | 24 óra | Minden meshed pod kap egyet. A proxy maga rotálja a lejárat előtt. |
 
 Az Istio-tól eltérően — ahol az istiod egyetlen bináris kezeli a discovery-t, a konfigurációt és a CA-feladatokat — a Linkerd ezeket külön deploymentekre osztja. Ez szándékos biztonsági döntés: ha a CA kompromittálódik, a service discovery tovább fut.
@@ -58,11 +60,11 @@ Az Istio-tól eltérően — ahol az istiod egyetlen bináris kezeli a discovery
 
 A Linkerd telepítésének első lépése az összes egyedi Kubernetes erőforrásfajta (CRD) telepítése. Ezek definiálják az olyan Linkerd-specifikus objektumokat, mint a `Server`, az `AuthorizationPolicy`, a `MeshTLSAuthentication` és hasonlók. A CRD-k nélkül a vezérlősík nem tud elindulni, mert az általa kezelt erőforrástípusok nem lennének ismertek a Kubernetes API-szerver számára.
 
-A projektben a `linkerd-crds.yaml` fájl tartalmazza ezeket a definíciókat.
+A projektben a `k8s/linkerd/linkerd-crds.yaml` fájl tartalmazza ezeket a definíciókat.
 
 ### 4.2 A vezérlősík telepítése
 
-A vezérlősíkot a `linkerd-control-plane.yaml` fájl telepíti, amely a következő különálló komponenseket hozza létre a `linkerd` névtérben:
+A vezérlősíkot a `k8s/linkerd/linkerd-control-plane.yaml` fájl telepíti, amely a következő komponenseket hozza létre a `linkerd` névtérben (három Deployment: `linkerd-identity`, `linkerd-destination`, `linkerd-proxy-injector`):
 
 **linkerd-identity** — a Hitelesítő Hatóság (CA). Fogadja a proxy-któl érkező tanúsítványkéréseket (CSR-eket), validálja azokat a Kubernetes TokenReview API-n keresztül, majd aláírja az Issuer CA-val. Ez az a komponens, amely a munkaterhelések identitását meggyőzi.
 
@@ -70,13 +72,15 @@ A vezérlősíkot a `linkerd-control-plane.yaml` fájl telepíti, amely a követ
 
 **linkerd-proxy-injector** — a MutatingAdmissionWebhook. Ez a komponens felelős azért, hogy az annotált névterekbe kerülő podokba automatikusan bejuttassa a `linkerd-proxy` és `linkerd-init` konténereket.
 
-**linkerd-policy-controller** — a policy CRD-k (Server, AuthorizationPolicy) reconciliation-jét végzi, és betölti ezeket a linkerd-destination policy-nézetébe.
+**policy controller** — a `linkerd-destination` pod `policy` konténere (nem külön Deployment). A policy CRD-k (Server, AuthorizationPolicy) reconciliation-jét végzi, és a proxy-k felé kiszolgálja a policy-adatokat.
 
-A vezérlősík saját `linkerd` névterében fut, amelyre az `linkerd.io/inject: disabled` annotáció vonatkozik — a vezérlősík maga nem kap proxy sidecar-t.
+A vezérlősík saját `linkerd` névterében fut, amelyre az `linkerd.io/inject: disabled` annotáció vonatkozik — a vezérlősík podjai nem a webhookon keresztül kapják a proxyt; a `linkerd-proxy` konténer közvetlenül a vezérlősík manifestjében szerepel.
+
+> **Natív sidecar és a benchmark:** a manifest `proxy.nativeSidecar: true` beállítással készült, vagyis a `linkerd-proxy` `restartPolicy: Always` init-konténerként (Kubernetes natív sidecar) fut, és az injector is így injektálja az alkalmazás podokba. A benchmark minikube-ja (Kubernetes 1.28) ezt nem fogadja el, ezért a `benchmark/prepare_linkerd.py` klasszikus sidecar módra alakítja a manifesteket (UTF-16 → UTF-8 konverzióval együtt, kimenet: `benchmark/.build/linkerd/`). A `k8s/linkerd/linkerd-crds.yaml` és `linkerd-control-plane.yaml` UTF-16 kódolású, közvetlen `kubectl apply` előtt UTF-8-ra kell alakítani.
 
 ### 4.3 Kubernetes és Linkerd komponensek — áttekintő diagram
 
-Az alábbi komponens diagram a Linkerd négy különálló vezérlősík-komponensét, az adatsík proxy felépítését, valamint a MicroBank projektben alkalmazott policy- és bypass-mechanizmusokat mutatja be.
+Az alábbi komponens diagram a Linkerd négy vezérlősík-komponensét, az adatsík proxy felépítését, valamint a MicroBank projektben alkalmazott policy- és bypass-mechanizmusokat mutatja be.
 
 ```mermaid
 flowchart TB
@@ -90,12 +94,12 @@ flowchart TB
         IDENTITY["linkerd-identity\n─────────────────\nCA — tanúsítványkiadás\nTokenReview-alapú validáció"]
         DESTINATION["linkerd-destination\n─────────────────\nservice discovery\npolicy elosztás (gRPC API)"]
         INJECTOR["linkerd-proxy-injector\n─────────────────\nsidecar injection webhook"]
-        POLICY_CTRL["linkerd-policy-controller\n─────────────────\nServer + AuthorizationPolicy\nreconciliation"]
+        POLICY_CTRL["policy controller\n(linkerd-destination pod)\n─────────────────\nServer + AuthorizationPolicy\nreconciliation"]
     end
 
     subgraph STUDENT["student-research névtér  (linkerd.io/inject: enabled)"]
         subgraph POD["Meshed Pod  (pl. transaction-service)"]
-            INIT["linkerd-init\niptables intercept\n(4143 kimenő / 4140 bejövő)"]
+            INIT["linkerd-init\niptables intercept\n(4140 kimenő / 4143 bejövő)"]
             PROXY["linkerd-proxy  (Rust ~10 MB)\nkimenő és bejövő listener\nX.509 tanúsítvány tárolás"]
             APP["Alkalmazás konténer\n(pl. Spring Boot :8083)"]
             INIT --> PROXY
@@ -106,7 +110,7 @@ flowchart TB
     end
 
     subgraph EXCL["Sidecar nélküli podok"]
-        PG["PostgreSQL\n(skip-outbound-ports: 5432)"]
+        PG["PostgreSQL\n(linkerd.io/inject: disabled)"]
         OTEL["OTel Collector\n(linkerd.io/inject: disabled)"]
     end
 
@@ -118,7 +122,7 @@ flowchart TB
     APISERVER <-->|"Endpoints, EndpointSlices"| DESTINATION
     POLICY_CTRL -->|"Server + AuthPolicy adatok"| DESTINATION
     SERVER & NS_ANN -->|"policy reconciliation"| POLICY_CTRL
-    PROXY -.->|"bypass — iptables skip"| PG
+    PROXY -.->|"bypass — skip-outbound-ports: 5432"| PG
     PROXY -.->|"nincs intercept"| OTEL
 ```
 
@@ -137,15 +141,15 @@ A projektben ezen felül egy `config.linkerd.io/skip-outbound-ports: "5432"` ann
 Amikor egy pod indul az annotált névtérben:
 
 1. A Kubernetes API szerver átadja a pod-létrehozási kérést a **linkerd-proxy-injector** webhook-nak.
-2. A webhook módosítja a pod specifikációját: hozzáad egy **linkerd-init** init-konténert és egy **linkerd-proxy** sidecar konténert.
-3. A `linkerd-init` init-konténer lefut az alkalmazás előtt, és **iptables szabályokat** állít fel a pod hálózati névterében — az összes bejövő és kimenő TCP forgalmat a linkerd-proxy portjaira irányítva (4140 bejövő, 4143 kimenő).
+2. A webhook módosítja a pod specifikációját: hozzáad egy **linkerd-init** init-konténert és egy **linkerd-proxy** sidecar konténert (a projekt manifestjében natív sidecarként, `restartPolicy: Always` init-konténerként; a benchmarkban klasszikus konténerként).
+3. A `linkerd-init` init-konténer lefut az alkalmazás előtt, és **iptables szabályokat** állít fel a pod hálózati névterében — az összes bejövő és kimenő TCP forgalmat a linkerd-proxy portjaira irányítva (4143 bejövő, 4140 kimenő).
 4. Az alkalmazáskonténer elindul, és ettől kezdve minden hálózati forgalma a linkerd-proxy-n halad keresztül, anélkül hogy tudna erről.
 
 ### 5.3 Tanúsítványok kiadása pod indításkor
 
 A `linkerd-proxy` az elindulás után azonnal megszerzi a munkaterhelés-tanúsítványát:
 
-1. A proxy **Ed25519** privát kulcsot generál a pod belsejében — ez soha nem hagyja el a podot.
+1. A proxy **ECDSA P-256** privát kulcsot generál a pod belsejében — ez soha nem hagyja el a podot.
 2. Létrehoz egy CSR-t (tanúsítványkérést) a munkaterhelés identitásával, és azt a pod ServiceAccount JWT tokenjével írja alá.
 3. A CSR-t és a JWT-t elküldi a `linkerd-identity` komponensnek.
 4. A `linkerd-identity` a Kubernetes TokenReview API-n keresztül validálja a JWT-t — így a Linkerd identitásállítása ugyanabba a bizalomba gyökerezik, amelyet a kubelet is használ.
@@ -172,16 +176,16 @@ A kézfogás lépései megegyeznek az Istio dokumentációban leírtakkal: TCP k
 
 | Primitív | Linkerd választása | Istio (alapértelmezett) |
 |---|---|---|
-| Munkaterhelés-kulcs típusa | **Ed25519** | RSA-2048 / ECDSA P-256 |
+| Munkaterhelés-kulcs típusa | **ECDSA P-256** | RSA-2048 / ECDSA P-256 |
 | Kulcscsere | ECDHE (X25519) | ECDHE |
 | Szimmetrikus titkosítás | AES-128-GCM (TLS 1.3 alap) | AES-128/256-GCM |
 | Integritás | AEAD (GCM részeként) | AEAD |
 
-Az Ed25519 kulcsok és az X25519 kulcscsere lényegesen gyorsabban generálható és ellenőrizhető, mint az RSA — ez az egyik oka annak, hogy a Linkerd kézfogásai olcsóbbak az Istio alapértelmezett RSA pipeline-jánál.
+Az ECDSA P-256 kulcsok és az X25519 kulcscsere lényegesen gyorsabban generálható és ellenőrizhető, mint az RSA — ez az egyik oka annak, hogy a Linkerd kézfogásai olcsóbbak az Istio alapértelmezett RSA pipeline-jánál. (A projekt Issuer/Trust Anchor tanúsítványa is ECDSA P-256 kulcsú.)
 
 ### 6.4 Deployment és kommunikáció — szekvenciadiagram
 
-Az alábbi diagram két fázisban mutatja be a Linkerd működését. Az Istio megfelelő diagramjával összevetve a legfontosabb különbségek: az Ed25519 kulcs, a JWT-alapú tanúsítványkérés TokenReview validációval, a `linkerd-destination` automatikus célfelderítése (DestinationRule nélkül), és a `default-inbound-policy` mint az Istio PeerAuthentication megfelelője.
+Az alábbi diagram két fázisban mutatja be a Linkerd működését. Az Istio megfelelő diagramjával összevetve a legfontosabb különbségek: az ECDSA P-256 kulcs, a JWT-alapú tanúsítványkérés TokenReview validációval, a `linkerd-destination` automatikus célfelderítése (DestinationRule nélkül), és a `default-inbound-policy` mint az Istio PeerAuthentication megfelelője.
 
 ```mermaid
 sequenceDiagram
@@ -207,10 +211,10 @@ sequenceDiagram
         WH-->>API: Módosított pod spec visszaküldése
         API->>II: linkerd-init elindítása (elsőként fut)
         II->>II: iptables szabályok konfigurálása
-        Note right of II: Kimenő forgalom → 4143<br/>Bejövő forgalom → 4140
+        Note right of II: Kimenő forgalom → 4140<br/>Bejövő forgalom → 4143
         II-->>API: Init konténer befejezve
         API->>PA: linkerd-proxy elindítása
-        PA->>PA: Ed25519 privát kulcs generálása
+        PA->>PA: ECDSA P-256 privát kulcs generálása
         PA->>PA: CSR összeállítása + ServiceAccount JWT aláírás
         PA->>ID: CSR + JWT token elküldése (gRPC)
         ID->>API: TokenReview kérés (JWT validáció)
@@ -225,7 +229,7 @@ sequenceDiagram
         Note over AA,AB: 2. fázis — Szolgáltatások közötti mTLS kommunikáció
 
         AA->>PA: HTTP kérés (localhost:port)
-        Note right of AA: iptables intercept → proxy (4143)
+        Note right of AA: iptables intercept → proxy (4140)
         PA->>DST: Cél lekérdezése — meshed-e? (gRPC)
         DST-->>PA: Célpod identitása és policy adatok
         PA->>PB: TCP kapcsolat + ClientHello (TLS 1.3)
@@ -262,14 +266,16 @@ A névtér `config.linkerd.io/default-inbound-policy` annotációja határozza m
 |---|---|---|
 | `all-unauthenticated` | Minden forgalmat elfogad (de meshed podok között az mTLS titkosítás automatikusan aktív). | PeerAuthentication PERMISSIVE |
 | `all-authenticated` | Csak érvényes mTLS identitással rendelkező hívóktól fogad el forgalmat; minden egyéb elutasítva. | PeerAuthentication STRICT |
-| `cluster-authenticated` | Mint az `all-authenticated`, de a fürtön belüli nem-hitelesített hívókat is elfogadja. | (nincs pontos Istio megfelelő) |
+| `cluster-authenticated` | Mint az `all-authenticated`, de csak a fürt hálózatából (`clusterNetworks`) érkező, mTLS-sel hitelesített hívókat fogadja el. | (nincs pontos Istio megfelelő) |
 | `deny` | Minden bejövő forgalmat elutasít. | (AuthorizationPolicy action: DENY globálisan) |
 
 ### 7.3 Server — a bejövő port explicit definiálása
 
 A **Server** erőforrás megjelöl egy pod-csoport adott portját mint policy által kezelt belépési pontot. A Server definiálásával felülírható a névtér alapértelmezett policy-ja az adott portra vonatkozóan.
 
-A projektben az ingress belépési pontokhoz (`api-gateway:8080`, `frontend:80`) `accessPolicy: all-unauthenticated` Server erőforrások kerülnek. Ez az Istio `portLevelMtls: PERMISSIVE` mechanizmusának pontos Linkerd megfelelője — azért szükséges, mert az NGINX ingress controller nem meshed, és mTLS identitás nélkül kapcsolódna ezekhez a portokhoz.
+A projektben (`k8s/linkerd/authorization-policies-strict.yaml`) az ingress belépési pontokhoz (`api-gateway:8080`, `frontend:80`) `accessPolicy: all-unauthenticated` Server erőforrások kerülnek. Ez az Istio `portLevelMtls: PERMISSIVE` mechanizmusának pontos Linkerd megfelelője — azért szükséges, mert az NGINX ingress controller nem meshed, és mTLS identitás nélkül kapcsolódna ezekhez a portokhoz.
+
+Az Istio konfigurációval ellentétben a Grafana (3000) és a Prometheus (9090) portjára nincs ilyen kivétel. Mivel a `helm/monitoring` podjai nem kapnak inject annotációt, a névtér annotációja alapján meshed podok, így `all-authenticated` mellett az ingressen keresztül nem érhetők el (helyette `kubectl port-forward`). A szigorú policy helyett alkalmazható `k8s/linkerd/authorization-policies-disable.yaml` a névtér alapértelmezését `all-unauthenticated`-re állítja.
 
 ### 7.4 Nincs DestinationRule-megfelelő
 
@@ -285,7 +291,7 @@ Az alábbiakban nyomon követhető egy pénzátutalási kérés útja a MicroBan
 Az NGINX ingress controller HTTP kérést küld az `api-gateway` pod 8080-as portjára. Erre a portra egy `Server` erőforrás érvényes `accessPolicy: all-unauthenticated` beállítással, így a nem meshed NGINX is kapcsolódhat.
 
 **2. Belső hívás: api-gateway → transaction-service:**
-Az api-gateway alkalmazása kérést küld a transaction-service felé. Az iptables szabályok a `linkerd-proxy` kimeneti iptables hook-jára irányítják a forgalmat (4143-as port). A proxy lekérdezi a `linkerd-destination`-t, azonosítja a célt mint meshed workload-ot, elvégzi az mTLS kézfogást a transaction-service proxy-jával, majd titkosított csatornán küldi a kérést.
+Az api-gateway alkalmazása kérést küld a transaction-service felé. Az iptables szabályok a `linkerd-proxy` kimeneti listenerére irányítják a forgalmat (4140-es port). A proxy lekérdezi a `linkerd-destination`-t, azonosítja a célt mint meshed workload-ot, elvégzi az mTLS kézfogást a transaction-service proxy-jával, majd titkosított csatornán küldi a kérést.
 
 **3. A transaction-service-től induló lánc:**
 A transaction-service proxy-ja ugyanígy kezeli a kimenő hívásokat az account-service, fraud-service, exchange-service, notification-service és audit-service felé. Minden kérés automatikusan mTLS-en halad, az alkalmazáskód módosítása nélkül.
@@ -318,7 +324,7 @@ A Linkerd vezérlősíkja és adatsíkja szoros együttműködésben dolgozik:
 - `linkerd-destination` — service discovery és policy elosztás
 - `linkerd-identity` — CA, munkaterhelés-tanúsítványok kiadása
 - `linkerd-proxy-injector` — webhook, amely injektálja a sidecar-t
-- `linkerd-policy-controller` — policy CRD-k reconciliálása
+- policy controller (`linkerd-destination` pod, `policy` konténer) — policy CRD-k reconciliálása
 
 **Adatsík (minden meshed pod):**
 - `linkerd-proxy` (Rust mikro-proxy, ~10 MB) — automatikus mTLS, Server/AuthorizationPolicy érvényesítés, per-route retry/timeout, telemetria
@@ -337,12 +343,12 @@ A Linkerd vezérlősíkja és adatsíkja szoros együttműködésben dolgozik:
 | Vezérlősík felépítése | Monolitikus `istiod` | Több egyedi célú deployment |
 | Proxy kommunikációs protokoll | xDS (Envoy-kompatibilis) | Egyedi gRPC API |
 | Munkaterhelés-identitás séma | SPIFFE URI | Kubernetes-stílusú DNS |
-| Tanúsítványkulcs típusa (alap) | RSA-2048 | Ed25519 |
+| Tanúsítványkulcs típusa (alap) | RSA-2048 | ECDSA P-256 |
 | mTLS bekapcsolási modell | Konfigurálható portonként (PeerAuthentication) | Mindig aktív meshed podok között; engedélyezés különválik |
 | Funkciófelület | Nagyon széles (egress, WASM szűrők, multicluster, virtual services, gateways…) | Kis és véleményes |
 | Várható késleltetési overhead | Magasabb | Alacsonyabb |
 
-A tesztelt hipotézis: a kisebb funkciófelület és a Rust implementáció mérhetően jobb **p99 késleltetést**, **kisebb RSS-t podokonként** és **alacsonyabb CPU-t kérésenként** eredményez a Linkerd esetén, miközben ugyanazt a Zero Trust mTLS biztonsági garanciát nyújtja. A `k6/` könyvtárban lévő forgalmi profilok ugyanazt a pénzátutalási folyamatot hajtják végre mindkét mesh ellen és egy mesh nélküli alapállapot (baseline) ellen is.
+A tesztelt hipotézis: a kisebb funkciófelület és a Rust implementáció mérhetően jobb **p99 késleltetést**, **kisebb RSS-t podokonként** és **alacsonyabb CPU-t kérésenként** eredményez a Linkerd esetén, miközben ugyanazt a Zero Trust mTLS biztonsági garanciát nyújtja. A `k6/` könyvtárban lévő forgalmi profilok ugyanazt a pénzátutalási folyamatot hajtják végre mindkét mesh ellen és egy mesh nélküli alapállapot (baseline) ellen is; a mérést a `benchmark/run.sh` vezérli (lásd [benchmark/README.md](../benchmark/README.md)).
 
 ---
 
@@ -354,8 +360,8 @@ A Linkerd biztonsági architektúrája ugyanazon négy pillérre épül, mint az
 |---|---|---|
 | PKI | Identitás és bizalom — *ki vagy?* | Trust Anchor → Issuer CA → 24 órás munkaterhelés-tanúsítványok |
 | Munkaterhelés-identitás | Ellenőrizhető tanúsítványba kódolja az identitást | `{sa}.{ns}.serviceaccount.identity.linkerd.cluster.local` SAN |
-| TLS / mTLS | Titkosítás + kölcsönös hitelesítés — *bizonyítsd be* | TLS 1.3, Ed25519 kulcsok, automatikus minden meshed pod között |
+| TLS / mTLS | Titkosítás + kölcsönös hitelesítés — *bizonyítsd be* | TLS 1.3, ECDSA P-256 kulcsok, automatikus minden meshed pod között |
 | linkerd-proxy | Transzparensen érvényesíti a szabályzatokat | Rust mikro-proxy, gRPC konfiguráció a vezérlősíktól |
-| Linkerd vezérlősík | Hangolja össze a rendszert | Szétválasztva: destination / identity / injector / policy |
+| Linkerd vezérlősík | Hangolja össze a rendszert | Szétválasztva: destination (+ policy) / identity / injector |
 
 Együttesen ugyanolyan termelési szintű Zero Trust állást valósítanak meg, mint az Istio — minden kapcsolat hitelesített, minden bájt titkosított —, de lényegesen kisebb pod-szintű overheadjel.

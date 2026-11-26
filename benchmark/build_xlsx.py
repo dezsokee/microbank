@@ -43,7 +43,7 @@ BUCKET = 10
 PROXIES = {"istio-proxy", "linkerd-proxy"}
 CATS = ["app", "sidecars", "control-plane", "monitoring", "ingress", "kubernetes"]
 CAT_HU = {"app": "App konténerek", "sidecars": "Sidecar proxyk", "control-plane": "Mesh control plane",
-          "monitoring": "Monitoring (Prometheus+Grafana)", "ingress": "Ingress NGINX", "kubernetes": "Kubernetes rendszer",
+          "monitoring": "Monitoring (Prometheus+Grafana+OTel)", "ingress": "Ingress NGINX", "kubernetes": "Kubernetes rendszer",
           "node": "Teljes minikube node"}
 
 
@@ -53,7 +53,7 @@ def category(ns, pod, container):
     if ns == "ingress-nginx":
         return "ingress"
     if ns == "student-research":
-        if pod.startswith("monitoring-"):
+        if pod.startswith("monitoring-") or "otel-collector" in pod:
             return "monitoring"
         return "sidecars" if container in PROXIES else "app"
     return "kubernetes"
@@ -371,10 +371,10 @@ notes = [
     ("Futási sorrend", "Stackenként: konfigurálás + minden pod újraindítása (Postgres emptyDir → üres DB), 1 p warm-up (nem mért), 2 p idle, normal, 1 p szünet, peak, 1 p szünet, burst. Sorrend: Istio, baseline (egy menetben), majd Linkerd egy külön menetben, a gép újraindítása után (az első Linkerd próbálkozást memóriahiány szakította meg)."),
     ("Erőforrás-limitek", "A mérés idejére az account-service és transaction-service CPU limitje 500m → 1500m (mindkét stacknél azonos); minden más a Helm chart alapértéke. A kért döntés célja: a peak/burst ne a limitbe ütközzön."),
     ("Mintavétel", "10 s-onként: kubelet Summary API (konténerenkénti kumulatív CPU-nanoszekundum + working set), a CPU-ráta két minta különbségéből; node szint: docker stats minikube. A k6 konténer nincs benne a mérésben."),
-    ("Kategóriák", "App: student-research meshelt podok alkalmazás konténerei + Postgres. Sidecar: istio-proxy / linkerd-proxy. Control plane: istio-system / linkerd namespace (Linkerd-nél a control plane podok saját proxyja is ide számít). Monitoring: Prometheus + Grafana (mesh alatt sidecarral). Kubernetes: kube-system."),
+    ("Kategóriák", "App: student-research meshelt podok alkalmazás konténerei + Postgres. Sidecar: istio-proxy / linkerd-proxy. Control plane: istio-system / linkerd namespace (Linkerd-nél a control plane podok saját proxyja is ide számít). Monitoring: Prometheus + Grafana (mesh alatt sidecarral) + OTel collector (sidecar nélkül). Kubernetes: kube-system."),
     ("Instrumentáció", "Az api-gateway és transaction-service a client_request_duration_seconds metrikával bővített lokális image-en fut mindkét stackben."),
     ("Ismert hibák", "Burst alatt a transaction-service readiness probe-ja (3 s timeout) időnként kiesik → 502 (baseline) / 503 (Istio). Ez valós telítettségi viselkedés, nem mérési hiba."),
-    ("Korlátok", "Egyetlen futás kombinációnként (nincs ismétlés, szórás); a k6 ugyanazon a gépen fut; az otel collector nincs telepítve (exportálási hibák minden stackben jelen). A Linkerd menet más időpontban (újraindított gépen) futott, mint az Istio/baseline — ugyanaz a cluster és konfiguráció, de a host állapota eltér: a node-szintű (docker stats) CPU idle-ben a Linkerd menetben ~640m volt a ~200–270m helyett, miközben a konténerenkénti összeg ugyanolyan alacsony. A többlet a podokon kívüli folyamatokból jön (kubelet, dockerd a minikube konténerben), ezért a stackek közötti összevetéshez a konténer-szintű kategóriák (app, sidecar, control plane) a megbízhatóak, a 'Teljes minikube node' sor kevésbé."),
+    ("Korlátok", "Egyetlen futás kombinációnként (nincs ismétlés, szórás); a k6 ugyanazon a gépen fut; az OTel export ki van kapcsolva (global.otel.enabled=false), collector nem fut. A Linkerd menet más időpontban (újraindított gépen) futott, mint az Istio/baseline — ugyanaz a cluster és konfiguráció, de a host állapota eltér: a node-szintű (docker stats) CPU idle-ben a Linkerd menetben ~640m volt a ~200–270m helyett, miközben a konténerenkénti összeg ugyanolyan alacsony. A többlet a podokon kívüli folyamatokból jön (kubelet, dockerd a minikube konténerben), ezért a stackek közötti összevetéshez a konténer-szintű kategóriák (app, sidecar, control plane) a megbízhatóak, a 'Teljes minikube node' sor kevésbé."),
 ]
 header(md, 3, ["Téma", "Leírás"])
 for j, (a, b) in enumerate(notes, 4):

@@ -22,10 +22,12 @@ mkdir -p "$OUT"
 NS=student-research
 BASE_URL=${BASE_URL:-http://$(minikube ip 2>/dev/null)}
 R=$(native "$REPO")
-# Same for every stack: chart values as installed, plus raised CPU limits for the two
-# bottleneck services (at 500m the transaction-service readiness probe times out under
-# peak/burst and the pod drops out of the endpoints → 503s).
-HELM_COMMON=(--set global.otel.enabled=true
+# Same for every stack: chart values as installed, OTel endpoint env vars off (no collector
+# runs during the benchmark; the SDKs still fall back to localhost:4318, which fails locally
+# and never crosses a sidecar), plus raised CPU limits for the two bottleneck services (at 500m the
+# transaction-service readiness probe times out under peak/burst and the pod drops out
+# of the endpoints → 503s).
+HELM_COMMON=(--set global.otel.enabled=false
              --set account-service.resources.limits.cpu=1500m
              --set transaction-service.resources.limits.cpu=1500m)
 # api-gateway + transaction-service images with client_request_duration_seconds, built
