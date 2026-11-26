@@ -31,10 +31,6 @@ HELM_COMMON=(--set global.otel.enabled=false
              --set account-service.resources.limits.cpu=1500m
              --set transaction-service.resources.limits.cpu=1500m
              --set postgres.resources.limits.cpu=1500m)
-# api-gateway + transaction-service images with client_request_duration_seconds, built
-# inside minikube's docker daemon (see README). Skipped if they are not present.
-INSTRUMENTED=("api-gateway:microbank-api-gateway:test-instrumented"
-              "transaction-service:microbank-transaction-service:test-instrumented")
 
 log() { echo "[$(date +%H:%M:%S)] $*" | tee -a "$OUT/run.log"; }
 phase() { echo "$1" > "$OUT/phase.txt"; log "PHASE $1"; }
@@ -51,19 +47,6 @@ wait_ns_ready() {
   return 1
 }
 
-patch_images() {
-  local available
-  available=$(minikube image ls 2>/dev/null)
-  for pair in "${INSTRUMENTED[@]}"; do
-    local svc=${pair%%:*} img=${pair#*:}
-    if ! grep -q "$img" <<<"$available"; then
-      log "instrumented image $img not in minikube — keeping chart image for $svc"; continue
-    fi
-    kubectl patch deploy "microbank-$svc" -n $NS --type=json -p "[
-      {\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/image\",\"value\":\"$img\"},
-      {\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/imagePullPolicy\",\"value\":\"Never\"}]" >/dev/null
-  done
-}
 
 # Fresh pods everywhere: postgres first (emptyDir → DB reset + reseed), then the rest.
 restart_all() {
@@ -118,7 +101,6 @@ configure() {
       kubectl scale deploy istiod -n istio-system --replicas=0 >/dev/null ;;
     *) log "unknown stack $stack"; return 1 ;;
   esac
-  patch_images
   restart_all
   kubectl get pods -n $NS -o custom-columns=POD:.metadata.name,CONTAINERS:.spec.containers[*].name --no-headers \
     | sed 's/^/    /' | tee -a "$OUT/run.log"

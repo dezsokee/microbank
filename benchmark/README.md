@@ -26,12 +26,6 @@ Minden stacknél: átkonfigurálás → minden pod újraindítása (Postgres el�
 - Telepítve: `istio-base` + `istiod` (Helm, `istio-system`), `microbank` és `monitoring` Helm release a `student-research` namespace-ben (lásd a [README Kubernetes fejezetét](../README.md#kubernetes-deployment-helm)). A Linkerd control plane-t nem kell előre telepíteni: ha hiányzik, a `run.sh` a `prepare_linkerd.py` kimenetéből telepíti.
 - Docker (a k6 a `grafana/k6` image-ből fut a `minikube` Docker hálózaton, ezért a saját CPU-ja nem kerül a mérésbe), `kubectl`, `helm`.
 - Python 3 + `openpyxl`, `pyyaml` (`pip install openpyxl pyyaml`).
-- Opcionális: az instrumentált (`client_request_duration_seconds`) api-gateway és transaction-service image a minikube Docker daemonjában. Ha nincs meg, a `run.sh` a chart image-ét használja:
-  ```bash
-  eval $(minikube docker-env)
-  docker build -t microbank-api-gateway:test-instrumented services/api-gateway
-  docker build -t microbank-transaction-service:test-instrumented services/transaction-service
-  ```
 
 ## Futtatás
 

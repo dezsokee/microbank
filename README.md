@@ -331,9 +331,8 @@ Every service is instrumented for Prometheus scraping:
 Key metrics:
 - `http_requests_total{method, path, status}` — request counter
 - `http_request_duration_seconds{method, path}` — latency histogram
-- `client_request_duration_seconds` — outbound-call latency measured by the caller itself (api-gateway and transaction-service), independent of any service mesh
 
-On Kubernetes, `helm/monitoring` deploys Prometheus + Grafana. Prometheus scrapes the services above, the Istio sidecars (`/stats/prometheus`) and per-container CPU/memory from the kubelet resource metrics endpoint. Grafana is provisioned with four dashboards: *MicroBank Overview*, *Istio Mesh Latency (mTLS overhead)*, *Client-Side Hop Latency (mesh-independent)* and *Container Resources (kubelet)*.
+On Kubernetes, `helm/monitoring` deploys Prometheus + Grafana. Prometheus scrapes the services above, the Istio sidecars (`/stats/prometheus`) and per-container CPU/memory from the kubelet resource metrics endpoint. Grafana is provisioned with three dashboards: *MicroBank Overview*, *Istio Mesh Latency (mTLS overhead)* and *Container Resources (kubelet)*.
 
 ### Distributed Tracing (OpenTelemetry)
 
